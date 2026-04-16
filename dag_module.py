@@ -186,16 +186,36 @@ class DAGBuilder:
             if not parent_entities or child_entity is None:
                 continue
 
+            # 处理 param：可能是数字、字符串数字、或表达式（如 '1/3'）
+            if param_value is None:
+                actual_param = 1.0
+            elif isinstance(param_value, (int, float)):
+                actual_param = float(param_value)
+            elif isinstance(param_value, str):
+                # 尝试解析字符串表达式（如 '1/3'）
+                try:
+                    # 使用 eval 安全解析简单数学表达式
+                    actual_param = float(eval(param_value))
+                except:
+                    actual_param = 1.0
+            else:
+                actual_param = 1.0
+
             # 复制父节点列表
             actual_parents = list(parent_entities)
-            actual_param = param_value
 
             # 检查 param 是否对应某个 t2 实体（通过数值匹配）
-            #尝试转化实体
-            try:
-                param_num = param_value
-            except (ValueError, TypeError):
-                param_num = None
+            # 注意：copy 关系的 param 为 None，不需要处理
+            param_num = None
+            if param_value is not None:
+                try:
+                    # 尝试将 param 转换为数字（包括表达式如 '1/3'）
+                    if isinstance(param_value, str):
+                        param_num = float(eval(param_value))
+                    else:
+                        param_num = float(param_value)
+                except (ValueError, TypeError, SyntaxError):
+                    param_num = None
 
             param_entity = None
             if param_num is not None:
@@ -339,46 +359,60 @@ class DAGPerturber:
         if entity.precision > 0:
             noisy_actual = noisy_stored / (10 ** entity.precision)
         else:
-            noisy_actual = float(noisy_stored)
+            # 保持整数类型
+            noisy_actual = int(noisy_stored)
 
         return noisy_actual
 
-    def _derive_single(self, parent_noisy: Union[int, float], edge: DAGEdge) -> float:
+    def _derive_single(self, parent_noisy: Union[int, float], edge: DAGEdge) -> Union[int, float]:
         """单父节点推导子节点值。"""
         rel, p = edge.rel_type, edge.param
+        result = 0.0
         if rel == RelationType.MULTIPLY:
-            return parent_noisy * p
+            result = parent_noisy * p
         elif rel == RelationType.ADD:
-            return parent_noisy + p
+            result = parent_noisy + p
         elif rel == RelationType.PERCENT:
-            return parent_noisy * p / 100
+            result = parent_noisy * p / 100
         elif rel == RelationType.COPY:
-            return float(parent_noisy)
-        return float(parent_noisy)
+            result = parent_noisy
+        else:
+            result = parent_noisy
+        
+        # 如果结果是整数且父节点也是整数，保持整数类型
+        if isinstance(parent_noisy, int) and isinstance(result, float) and result.is_integer():
+            return int(result)
+        return result
 
-    def _aggregate_multi(self, parent_vals: List[Union[int, float]], edges: List[DAGEdge]) -> float:
+    def _aggregate_multi(self, parent_vals: List[Union[int, float]], edges: List[DAGEdge]) -> Union[int, float]:
         """
         多父节点聚合推导子节点值。
         支持 add 和 multiply 两种聚合方式。
         """
         if not parent_vals or not edges:
-            return 0.0
+            return 0
 
         # 获取聚合类型（假设所有边类型相同）
         rel_type = edges[0].rel_type
 
+        result = 0.0
         if rel_type == RelationType.ADD:
             # 加法聚合：求和
-            return sum(parent_vals)
+            result = sum(parent_vals)
         elif rel_type == RelationType.MULTIPLY:
             # 乘法聚合：求积
             result = 1.0
             for v in parent_vals:
                 result *= v
-            return result
         else:
             # 其他类型回退到单父节点逻辑
             return self._derive_single(parent_vals[0], edges[0])
+        
+        # 如果所有父节点都是整数且结果也是整数，保持整数类型
+        all_int = all(isinstance(v, int) for v in parent_vals)
+        if all_int and isinstance(result, float) and result.is_integer():
+            return int(result)
+        return result
 
     def perturb_graphs(
             self,
@@ -435,10 +469,22 @@ class DAGPerturber:
                         # 根据边数量选择推导方式
                         if len(edges) == 1:
                             # 单父节点
-                            noisy_map[cur] = self._derive_single(parent_vals[0], edges[0])
+                            derived_val = self._derive_single(parent_vals[0], edges[0])
                         else:
                             # 多父节点聚合
-                            noisy_map[cur] = self._aggregate_multi(parent_vals, edges)
+                            derived_val = self._aggregate_multi(parent_vals, edges)
+                        
+                        # 保持原始实体的精度
+                        if cur in entity_map:
+                            entity = entity_map[cur]
+                            if entity.precision > 0:
+                                # 原始值是浮点数，保持浮点数格式
+                                noisy_map[cur] = round(float(derived_val), entity.precision)
+                            else:
+                                # 原始值是整数，保持整数格式
+                                noisy_map[cur] = int(round(derived_val)) if isinstance(derived_val, float) else derived_val
+                        else:
+                            noisy_map[cur] = derived_val
 
                 # 5. 更新入度
                 for edge in graph.edges:

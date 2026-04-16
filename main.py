@@ -132,8 +132,10 @@ def run_sanitizer_demo(
             # 打印 vault 中的映射信息
             vault = session_info.get("vault", {})
             for enc, rec in vault.items():
-                if rec["type"] == "t1":
-                    print(f"  t1映射: {enc!r} → {rec['original']!r}")
+                if rec["type"] == "t1_name":
+                    print(f"  t1_name映射: {enc!r} → {rec['original']!r}")
+                elif rec["type"] == "t1_fpe":
+                    print(f"  t1_fpe映射: {enc!r} → {rec['original']!r}")
                 elif rec["type"] == "t2_perturb":
                     print(f"  t2映射: {rec['original']!r} → {rec['noisy_val']} (扰动)")
 

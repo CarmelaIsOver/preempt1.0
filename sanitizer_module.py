@@ -33,7 +33,8 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 
 from name_replacer_module import NameReplacer
-from api import NERAPI, is_t1, is_t2
+from ff3_module import FPEManager
+from api import NERAPI, is_t1, is_t1_name, is_t1_fpe, is_t2
 from dag_module import T2DAGProcessor
 
 # ---------------------------------------------------------------------------
@@ -79,18 +80,19 @@ def _infer_precision(token: str) -> int:
 
 class Vault:
     """
-    t1         : {fpe_ciphertext → {type, original}}
+    t1_name    : {fake_name → {type, original}}
+    t1_fpe     : {fpe_ciphertext → {type, original, enc_meta}}
     t2_perturb : {noisy_str → {type, original, orig_val, noisy_val}}
-                 key 是裸数字字符串，仅用于审计，不参与反脱敏
-    t2_symbolic: {[TYPE_N] → {type, original, orig_val}}
-                 key 是占位符字符串，用于反脱敏步骤2
     """
 
     def __init__(self):
         self._data: Dict[str, Dict] = {}
 
-    def store_t1(self, enc: str, original: str) -> None:
-        self._data[enc] = {"type": "t1", "original": original}
+    def store_t1_name(self, fake_name: str, original: str) -> None:
+        self._data[fake_name] = {"type": "t1_name", "original": original}
+
+    def store_t1_fpe(self, enc: str, original: str, enc_meta: List) -> None:
+        self._data[enc] = {"type": "t1_fpe", "original": original, "enc_meta": enc_meta}
 
     def store_t2_perturb(
         self,
@@ -110,8 +112,11 @@ class Vault:
     def get(self, key: str) -> Optional[Dict]:
         return self._data.get(key)
 
-    def t1_ciphertexts(self) -> List[str]:
-        return [k for k, v in self._data.items() if v["type"] == "t1"]
+    def t1_name_keys(self) -> List[str]:
+        return [k for k, v in self._data.items() if v["type"] == "t1_name"]
+
+    def t1_fpe_keys(self) -> List[str]:
+        return [k for k, v in self._data.items() if v["type"] == "t1_fpe"]
 
     def to_dict(self) -> Dict:
         return dict(self._data)
@@ -139,6 +144,7 @@ class Sanitizer:
     def __init__(self, epsilon: float):
         self.total_epsilon = epsilon
         self.name_replacer = NameReplacer()
+        self.fpe_manager   = FPEManager()
         self.ner           = NERAPI()
 
     # ------------------------------------------------------------------
@@ -152,12 +158,14 @@ class Sanitizer:
         返回
         ----
         sanitized_text : 发给 LLM 的脱敏文本
-                         · t1 实体（姓名等） → 随机替换的假名
-                         · t2 实体           → 裸扰动数字（DAG 保证关联数值一致性）
+                         · PERSON 实体 → 随机替换的假名
+                         · 其他 t1 实体 → FPE 加密
+                         · t2 实体      → 裸扰动数字（DAG 保证关联数值一致性）
         session_info   : 反脱敏所需会话信息
         """
-        # 刷新姓名替换器会话
+        # 刷新姓名替换器和 FPE 会话
         self.name_replacer.refresh_session()
+        self.fpe_manager.refresh_session_tweak()
         ner_result, raw_edges = self.ner(prompt)
         print(raw_edges)
         # ── 收集 t2，送 DAG 扰动 ──────────────────────────────────
@@ -202,29 +210,41 @@ class Sanitizer:
 
         for i, (token, label) in indexed_sorted:
 
-            if is_t1(label):
-                # ── t1：姓名随机替换 ────────────────────────────
+            if is_t1_name(label):
+                # ── PERSON：姓名随机替换 ────────────────────────
                 fake_name = self.name_replacer.replace_name(token)
-                vault.store_t1(fake_name, token)
+                vault.store_t1_name(fake_name, token)
                 sanitized_text = sanitized_text.replace(token, fake_name, 1)
+
+            elif is_t1_fpe(label):
+                # ── 其他 t1（ORG/LOCATION/PHONE 等）：FPE 加密 ──
+                enc, enc_meta = self.fpe_manager.encrypt_master(token)
+                vault.store_t1_fpe(enc, token, enc_meta)
+                sanitized_text = sanitized_text.replace(token, enc, 1)
 
             elif is_t2(label):
                 # ── t2：裸扰动数字直接嵌入 ──────────────────────
                 ok, val = _parse_numeric(token)
                 if not ok:
-                    # 无法解析为数值（如 "130/80"）→ 降级为 t1 姓名替换
-                    fake_name = self.name_replacer.replace_name(token)
-                    vault.store_t1(fake_name, token)
-                    sanitized_text = sanitized_text.replace(token, fake_name, 1)
+                    # 无法解析为数值（如 "两个"、"130/80"）→ 保持原样，不做任何处理
                     continue
 
                 noisy     = noisy_map.get(i, val)
-                noisy_str = str(noisy) if isinstance(noisy, int) else str(noisy)
-                vault.store_t2_perturb(noisy_str, token, val, noisy)
+                # 保持原始精度：整数保持整数格式，浮点数保持浮点数格式
+                if isinstance(val, int) and isinstance(noisy, (int, float)):
+                    # 原始值是整数，扰动值也应该是整数
+                    noisy_int = int(round(noisy))
+                    noisy_str = str(noisy_int)
+                    vault.store_t2_perturb(noisy_str, token, val, noisy_int)
+                else:
+                    # 原始值是浮点数，保持浮点数格式
+                    noisy_str = str(noisy)
+                    vault.store_t2_perturb(noisy_str, token, val, noisy)
                 sanitized_text = sanitized_text.replace(token, noisy_str, 1)
 
         session_info: Dict = {
             "name_session":  self.name_replacer.get_session_info(),
+            "fpe_key_material": self.fpe_manager.get_key_material(),
             "eps_t2":        self.total_epsilon,
             "ner_result":    ner_result,
             "dag_info":      dag_info,
@@ -240,7 +260,9 @@ class Sanitizer:
     def desanitizer(self, response: str, session_info: Dict) -> Tuple[str, Dict]:
         """
         从 LLM 响应中还原 t1 实体。
-        t2 perturb 不参与反脱敏：LLM 基于扰动值给出的回答本就是有效近似结果。
+        - PERSON（t1_name）：假名 → 原文
+        - 其他 t1（t1_fpe）：FPE 密文 → 原文
+        - t2 perturb 不参与反脱敏：LLM 基于扰动值给出的回答本就是有效近似结果。
 
         参数
         ----
@@ -257,8 +279,8 @@ class Sanitizer:
         missing: List[str] = []
         restored = response
 
-        # ── 还原 t1（假名 → 原文）────────────────────────────
-        for fake_name in sorted(vault.t1_ciphertexts(), key=len, reverse=True):
+        # ── 还原 t1_name（假名 → 原文）────────────────────────
+        for fake_name in sorted(vault.t1_name_keys(), key=len, reverse=True):
             record = vault.get(fake_name)
             idx    = restored.find(fake_name)
             if idx != -1:
@@ -271,8 +293,29 @@ class Sanitizer:
             else:
                 missing.append(fake_name)
 
+        # ── 还原 t1_fpe（FPE 密文 → 原文）────────────────────
+        fpe_key_material = session_info.get("fpe_key_material", {})
+        if fpe_key_material:
+            fpe = FPEManager(
+                key=fpe_key_material.get("key"),
+                tweak=fpe_key_material.get("tweak")
+            )
+            for enc in sorted(vault.t1_fpe_keys(), key=len, reverse=True):
+                record = vault.get(enc)
+                idx    = restored.find(enc)
+                if idx != -1:
+                    original = fpe.decrypt_master(enc, record["enc_meta"])
+                    restored = (
+                        restored[:idx]
+                        + original
+                        + restored[idx + len(enc):]
+                    )
+                    found.append(enc)
+                else:
+                    missing.append(enc)
+
         # ── 审计 ─────────────────────────────────────────────────
-        billable = len(vault.t1_ciphertexts())
+        billable = len(vault.t1_name_keys()) + len(vault.t1_fpe_keys())
         audit: Dict = {
             "found":         list(dict.fromkeys(found)),
             "missing_t1":    missing,
@@ -321,8 +364,10 @@ if __name__ == "__main__":
 
         for k, rec in info["vault"].items():
             t = rec["type"]
-            if t == "t1":
-                print(f"  {k!r} → [t1] orig={rec['original']!r}")
+            if t == "t1_name":
+                print(f"  {k!r} → [t1_name] orig={rec['original']!r}")
+            elif t == "t1_fpe":
+                print(f"  {k!r} → [t1_fpe] orig={rec['original']!r}")
             elif t == "t2_perturb":
                 print(f"  {k!r} → [t2_perturb] orig={rec['orig_val']}  noisy={rec['noisy_val']}")
 
