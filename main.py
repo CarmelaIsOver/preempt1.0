@@ -1,25 +1,29 @@
 """
-调用 Sanitizer 对 data.txt 中的文本进行脱敏处理
+main.py  —  医疗提示词三标签脱敏系统
+
+调用 Sanitizer 对医疗提示词文本进行脱敏处理。
+
+三标签体系
+----------
+t1 : 个人身份信息
+     - t1_name (PERSON) → 随机假名替换
+     - t1_fpe  (其他)    → FF3 格式保持加密
+t2 : 数值型实体
+     - mLDP 局部差分隐私扰动 + DAG 关系保持
+t3 : 医疗实体（新增）
+     - MEDICINE / DISEASE / SYMPTOM / THERAPY
+     - FORBIDDEN_FOOD / SIDE_EFFECT / GENE / ORGAN / FUNCTION
+     - 通过 perturb_word 的 ST+FT MLDP 服务进行语义扰动
 """
 
 import json
 import os
 from typing import List, Dict
 
-# 导入 sanitizer 模块
 from sanitizer_module import Sanitizer
 
 
 def load_texts_from_file(file_path: str) -> List[str]:
-    """
-    从文件中读取文本，每行作为一个独立的待处理文本
-
-    Args:
-        file_path: 文件路径
-
-    Returns:
-        文本列表
-    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
 
@@ -38,24 +42,13 @@ def save_results(
         session_infos: List[Dict],
         output_dir: str = "./output"
 ) -> None:
-    """
-    保存脱敏结果到文件
-
-    Args:
-        original_texts: 原始文本列表
-        sanitized_texts: 脱敏文本列表
-        session_infos: 会话信息列表
-        output_dir: 输出目录
-    """
     os.makedirs(output_dir, exist_ok=True)
 
-    # 保存脱敏后的文本
     with open(f"{output_dir}/sanitized_output.txt", 'w', encoding='utf-8') as f:
         for i, text in enumerate(sanitized_texts):
             f.write(f"[{i + 1}] {text}\n")
             f.write("-" * 50 + "\n")
 
-    # 保存原始文本与脱敏文本对照
     with open(f"{output_dir}/comparison.txt", 'w', encoding='utf-8') as f:
         f.write("=" * 80 + "\n")
         f.write("原始文本 vs 脱敏文本 对照表\n")
@@ -68,13 +61,10 @@ def save_results(
             f.write(f"{san}\n")
             f.write("-" * 80 + "\n")
 
-    # 保存会话信息（注意：session_info 包含 vault，可能较大）
-    # 只保存必要信息，避免敏感信息泄露
     simplified_infos = []
     for info in session_infos:
         simplified = {
-            "session_tweak": info.get("session_tweak"),
-            "eps_t2": info.get("eps_t2"),
+            "eps": info.get("eps_t2"),
             "ner_result": info.get("ner_result"),
             "dag_info": info.get("dag_info"),
             "vault_keys": list(info.get("vault", {}).keys()) if info.get("vault") else [],
@@ -95,25 +85,14 @@ def run_sanitizer_demo(
         epsilon: float = 1.0,
         output_dir: str = "./output"
 ) -> None:
-    """
-    运行脱敏器主函数
-
-    Args:
-        file_path: 输入文件路径
-        epsilon: 隐私预算（越小保护越强）
-        output_dir: 输出目录
-    """
-    # 1. 读取数据
     print(f"正在读取文件: {file_path}")
     texts = load_texts_from_file(file_path)
     print(f"共读取 {len(texts)} 条文本\n")
 
-    # 2. 初始化 Sanitizer
     print("初始化 Sanitizer...")
     print(f"隐私预算 epsilon = {epsilon}\n")
     sanitizer = Sanitizer(epsilon=epsilon)
 
-    # 3. 逐条脱敏
     sanitized_texts = []
     session_infos = []
 
@@ -129,43 +108,42 @@ def run_sanitizer_demo(
             sanitized_texts.append(san_text)
             session_infos.append(session_info)
 
-            # 打印 vault 中的映射信息
             vault = session_info.get("vault", {})
             for enc, rec in vault.items():
                 if rec["type"] == "t1_name":
-                    print(f"  t1_name映射: {enc!r} → {rec['original']!r}")
+                    print(f"  [t1_name] {enc!r} → {rec['original']!r}")
                 elif rec["type"] == "t1_fpe":
-                    print(f"  t1_fpe映射: {enc!r} → {rec['original']!r}")
+                    print(f"  [t1_fpe]  {enc!r} → {rec['original']!r}")
                 elif rec["type"] == "t2_perturb":
-                    print(f"  t2映射: {rec['original']!r} → {rec['noisy_val']} (扰动)")
+                    print(f"  [t2]      {rec['original']!r} → {rec['noisy_val']} (扰动)")
+                elif rec["type"] == "t3_perturb":
+                    print(f"  [t3]      [{rec['label']}] {rec['original']!r} → {enc!r} (sim={rec['similarity']:.3f})")
 
         except Exception as e:
             print(f"处理失败: {e}")
             sanitized_texts.append(f"[ERROR: {e}]")
             session_infos.append({})
 
-    # 4. 保存结果
     save_results(texts, sanitized_texts, session_infos, output_dir)
 
-    # 5. 可选：演示反脱敏（只对第一条进行）
+    # 反脱敏演示（只对第一条）
     if sanitized_texts and session_infos[0]:
         print(f"\n{'=' * 60}")
-        print("反脱敏演示（仅还原 t1 实体）:")
+        print("反脱敏演示（还原 t1 和 t3 实体）:")
 
         restored, audit = sanitizer.desanitizer(sanitized_texts[0], session_infos[0])
         print(f"原始文本:     {texts[0]}")
         print(f"脱敏文本:     {sanitized_texts[0]}")
         print(f"反脱敏后:     {restored}")
-        print(f"t1 恢复率:    {audit['recovery_rate']}")
+        print(f"恢复率:       {audit['recovery_rate']}")
         if audit.get('missing_t1'):
-            print(f"未出现的 t1: {audit['missing_t1']}")
+            print(f"未出现的实体: {audit['missing_t1']}")
 
 
 def main():
-    """主函数"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="数据脱敏工具")
+    parser = argparse.ArgumentParser(description="医疗提示词三标签脱敏工具")
     parser.add_argument(
         "--input", "-i",
         type=str,

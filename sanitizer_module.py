@@ -1,5 +1,5 @@
 """
-sanitizer_module.py  —  实体级双模式脱敏系统
+sanitizer_module.py  —  实体级三模式脱敏系统
 
 设计原则
 --------
@@ -14,8 +14,15 @@ t2 实体（所有数值类型）
     → DAG 保证关联数值（如单价/数量/总价）扰动后仍满足数学关系
     → Vault 只记录用于审计，不参与反脱敏流程
 
+t3 实体（医疗词汇：药物/疾病/症状/疗法/忌口/副作用/基因/器官/功能）
+    → 通过 perturb_word 的 ST+FT MLDP 服务进行语义扰动
+    → 将原始医疗词汇替换为语义相近的扰动词汇
+    → 反脱敏：在 LLM 响应中 find(扰动词) → 替换回原始词
+
 反脱敏只需一步
     步骤1：t1 FPE 密文 → 原文
+    步骤2：t3 扰动医疗词 → 原文
+    t2 数值不参与反脱敏
 
 安全说明
 --------
@@ -34,8 +41,9 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from name_replacer_module import NameReplacer
 from ff3_module import FPEManager
-from api import NERAPI, is_t1, is_t1_name, is_t1_fpe, is_t2
+from api import NERAPI, canonical_label, is_t1, is_t1_name, is_t1_fpe, is_t2, is_t3
 from dag_module import T2DAGProcessor
+from t3_module import T3Perturber
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -109,6 +117,21 @@ class Vault:
             "noisy_val": noisy_val,
         }
 
+    def store_t3_perturb(
+        self,
+        perturbed: str,
+        original:  str,
+        label:     str,
+        similarity: float,
+    ) -> None:
+        """存储 t3 医疗实体扰动映射。"""
+        self._data[perturbed] = {
+            "type":       "t3_perturb",
+            "original":   original,
+            "label":      label,
+            "similarity": similarity,
+        }
+
     def get(self, key: str) -> Optional[Dict]:
         return self._data.get(key)
 
@@ -117,6 +140,9 @@ class Vault:
 
     def t1_fpe_keys(self) -> List[str]:
         return [k for k, v in self._data.items() if v["type"] == "t1_fpe"]
+
+    def t3_keys(self) -> List[str]:
+        return [k for k, v in self._data.items() if v["type"] == "t3_perturb"]
 
     def to_dict(self) -> Dict:
         return dict(self._data)
@@ -146,6 +172,7 @@ class Sanitizer:
         self.name_replacer = NameReplacer()
         self.fpe_manager   = FPEManager()
         self.ner           = NERAPI()
+        self.t3_perturber  = T3Perturber()
 
     # ------------------------------------------------------------------
     # 脱敏
@@ -209,6 +236,7 @@ class Sanitizer:
         sanitized_text = prompt
 
         for i, (token, label) in indexed_sorted:
+            label = canonical_label(label)
 
             if is_t1_name(label):
                 # ── PERSON：姓名随机替换 ────────────────────────
@@ -241,6 +269,17 @@ class Sanitizer:
                     noisy_str = str(noisy)
                     vault.store_t2_perturb(noisy_str, token, val, noisy)
                 sanitized_text = sanitized_text.replace(token, noisy_str, 1)
+
+            elif is_t3(label):
+                # ── t3：医疗实体 MLDP 语义扰动 ─────────────────
+                t3_result = self.t3_perturber.perturb(
+                    token, label, epsilon=self.total_epsilon
+                )
+                perturbed = t3_result['perturbed']
+                vault.store_t3_perturb(
+                    perturbed, token, label, t3_result['similarity']
+                )
+                sanitized_text = sanitized_text.replace(token, perturbed, 1)
 
         session_info: Dict = {
             "name_session":  self.name_replacer.get_session_info(),
@@ -314,8 +353,22 @@ class Sanitizer:
                 else:
                     missing.append(enc)
 
+        # ── 还原 t3（扰动医疗词 → 原文）────────────────────
+        for perturbed in sorted(vault.t3_keys(), key=len, reverse=True):
+            record = vault.get(perturbed)
+            idx    = restored.find(perturbed)
+            if idx != -1:
+                restored = (
+                    restored[:idx]
+                    + record["original"]
+                    + restored[idx + len(perturbed):]
+                )
+                found.append(perturbed)
+            else:
+                missing.append(perturbed)
+
         # ── 审计 ─────────────────────────────────────────────────
-        billable = len(vault.t1_name_keys()) + len(vault.t1_fpe_keys())
+        billable = len(vault.t1_name_keys()) + len(vault.t1_fpe_keys()) + len(vault.t3_keys())
         audit: Dict = {
             "found":         list(dict.fromkeys(found)),
             "missing_t1":    missing,
@@ -350,8 +403,8 @@ if __name__ == "__main__":
          "each priced at 150 yuan, total 450 yuan, contact: 13800138000."),
         ("成绩",
          "我叫小明，我的英语成绩是97，我的语文成绩是88，我的平均成绩是92.5"),
-        ("多科目",
-         "小明期中考试：数学97分，语文88分，英语91分，平均分92.0分"),
+        ("医疗t3",
+         "患者张伟因持续咳嗽、发热3天入院，诊断为肺炎，予头孢曲松抗感染治疗。"),
     ]
 
     for tag, text in cases:
@@ -370,9 +423,11 @@ if __name__ == "__main__":
                 print(f"  {k!r} → [t1_fpe] orig={rec['original']!r}")
             elif t == "t2_perturb":
                 print(f"  {k!r} → [t2_perturb] orig={rec['orig_val']}  noisy={rec['noisy_val']}")
+            elif t == "t3_perturb":
+                print(f"  {k!r} → [t3_perturb] [{rec['label']}] orig={rec['original']!r}  sim={rec['similarity']:.3f}")
 
         restored, audit = sanitizer.desanitizer(san, info)
-        print(f"反脱敏(t1还原): {restored}")
+        print(f"反脱敏(t1+t3还原): {restored}")
         print(f"恢复率: {audit['recovery_rate']}")
 
     # 跨会话验证
