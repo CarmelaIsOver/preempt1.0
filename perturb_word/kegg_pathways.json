@@ -1,0 +1,16 @@
+{
+  "diabetes": {
+    "en": "type 2 diabetes mellitus",
+    "id": "ds:H00409",
+    "drugs": [
+      "human"
+    ]
+  },
+  "coronary_artery_disease": {
+    "en": "coronary artery disease",
+    "id": "ds:H01742",
+    "drugs": [
+      "nitroglycerin"
+    ]
+  }
+}

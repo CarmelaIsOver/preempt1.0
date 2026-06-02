@@ -1,4 +1,4 @@
-"""ST+FT MLDP 扰动服务"""
+"""ST+FT MLDP 扰动服务（指数机制版本 + 分类词典 + ST类比推理 + 领域约束）"""
 import os
 os.environ['HF_HOME'] = '/root/.cache/huggingface_local'
 os.environ['HF_HUB_OFFLINE'] = '1'
@@ -18,16 +18,23 @@ print("加载FT...")
 import fasttext
 ft = fasttext.load_model('cc.zh.300.bin')
 
-print("加载词典向量...")
+print("加载分类词典...")
 DICT_DIR = 'dict'
-dicts = {}
-for f in sorted(os.listdir(DICT_DIR)):
-    if f.endswith('_words.npy'):
-        domain = f.replace('_words.npy', '')
-        words = np.load(f'{DICT_DIR}/{f}', allow_pickle=True)
-        vecs = np.load(f'{DICT_DIR}/{domain}_vecs.npy')
-        dicts[domain] = (words, vecs)
+typed_dicts = {}
+for domain in ['disease', 'drug', 'symptom', 'medical']:
+    wpath = f'{DICT_DIR}/{domain}_words.npy'
+    vpath = f'{DICT_DIR}/{domain}_vecs.npy'
+    if os.path.exists(wpath) and os.path.exists(vpath):
+        words = np.load(wpath, allow_pickle=True)
+        vecs = np.load(vpath)
+        typed_dicts[domain] = (words, vecs)
         print(f"  {domain}: {len(words)}词")
+    else:
+        print(f"  ⚠️ {domain}: 文件不存在，跳过")
+
+if not typed_dicts:
+    print("❌ 没有可用词典，退出")
+    sys.exit(1)
 
 print("READY")
 
@@ -42,80 +49,124 @@ def recv_all(conn):
     return data.decode('utf-8')
 
 
-def search_dict_by_vec(vec, domain='medical', top_k=50):
-    if domain not in dicts:
-        return []
-    words, vecs = dicts[domain]
-    sims = np.dot(vecs, vec) / (
-        np.linalg.norm(vecs, axis=1) * np.linalg.norm(vec) + 1e-8
-    )
-    idx = np.argsort(-sims)[:top_k]
-    return [(words[i], float(sims[i])) for i in idx]
-
-
-def smart_neighbors(word, epsilon=5.0, k=100, threshold_lower=0.3,
-                    threshold_upper=0.95, domain='medical'):
+def exponential_mechanism(word, epsilon, domain='medical', k=20,
+                          analogy_orig=None, analogy_pert=None):
+    """
+    指数机制扰动
+    如果提供 analogy_orig 和 analogy_pert，使用ST类比推理模式
+    疾病领域自动加领域约束（与原词ST相似度>0.55）
+    """
     t_total = time.time()
 
-    # 原词向量
-    st_orig = st.encode(word)
+    if domain not in typed_dicts:
+        domain = 'medical'
 
-    # 加噪声
-    noise_scale = 1.0 / epsilon
-    noise = np.random.normal(0, noise_scale, st_orig.shape)
-    perturbed = st_orig + noise
-    print(f"  [噪声] ε={epsilon}, σ={noise_scale:.4f}", file=sys.stderr, flush=True)
+    words, vecs = typed_dicts[domain]
 
-    candidates = []
+    # Step 1: 编码
+    st_child = st.encode(word)
 
-    # 词典搜索（扰动向量）
-    dict_cands = search_dict_by_vec(perturbed, domain, top_k=50)
-    for cand, sim in dict_cands:
-        candidates.append((sim, cand))
-    print(f"  [词典] {len(dict_cands)}候选", file=sys.stderr, flush=True)
+    # Step 2: 构建查询向量
+    if analogy_orig and analogy_pert:
+        # ===== ST类比推理模式 =====
+        st_orig = st.encode(analogy_orig)
+        st_pert = st.encode(analogy_pert)
+        delta = st_child - st_orig
+        query_vec = st_pert + delta
+        print(f"  [ST类比] {word} - {analogy_orig} + {analogy_pert}",
+              file=sys.stderr, flush=True)
+    else:
+        # ===== 直接相似度模式 =====
+        query_vec = st_child
 
-    # FT搜索（仅短词）
-    if len(word) <= 4:
-        ft_raw = ft.get_nearest_neighbors(word, k=k)
-        for score, near_word in ft_raw:
-            if near_word != word:
-                candidates.append((score, near_word))
-        print(f"  [FT] {len(ft_raw)}候选", file=sys.stderr, flush=True)
+    # Step 3: 计算相似度
+    sims = np.dot(vecs, query_vec) / (
+        np.linalg.norm(vecs, axis=1) * np.linalg.norm(query_vec) + 1e-8
+    )
 
-    # 去重
-    seen = set()
-    unique = []
-    for score, cand in candidates:
-        if cand != word and cand not in seen:
-            seen.add(cand)
-            unique.append((score, cand))
+    # Step 4: 排除原词
+    word_list = list(words)
+    if word in word_list:
+        sims[word_list.index(word)] = -1.0
 
-    if not unique:
-        return []
+    # Step 5: 过滤 + 领域约束 + 均匀取样
+    sorted_indices = np.argsort(-sims)
+    valid_mask = sims[sorted_indices] > -0.5
+    sorted_indices = sorted_indices[valid_mask]
 
-    # 批量编码候选词（只调一次ST）
-    cand_words = [c for _, c in unique]
-    cand_vecs = st.encode(cand_words, batch_size=32, show_progress_bar=False)
+    # 词典内相似度过滤
+    min_sim = 0.5 if domain == 'disease' else 0.2
+    sim_mask = sims[sorted_indices] > min_sim
+    sorted_indices = sorted_indices[sim_mask]
 
-    # 用原词向量过滤（保证语义质量）
-    filtered = []
-    for i, (score, cand) in enumerate(unique):
-        sim = float(np.dot(st_orig, cand_vecs[i]) /
-                    (np.linalg.norm(st_orig) * np.linalg.norm(cand_vecs[i]) + 1e-8))
-        if threshold_lower <= sim <= threshold_upper:
-            filtered.append({'new_word': cand, 'st_sim': sim})
+    # ===== 疾病领域约束：防止跨领域跳跃 =====
+    if domain == 'disease':
+        sims_to_orig = np.dot(vecs[sorted_indices], st_child) / (
+            np.linalg.norm(vecs[sorted_indices], axis=1) * np.linalg.norm(st_child) + 1e-8
+        )
+        orig_mask = sims_to_orig > 0.55
+        sorted_indices = sorted_indices[orig_mask]
+        print(f"  [领域约束] 保留{len(sorted_indices)}个同领域候选",
+              file=sys.stderr, flush=True)
 
-    filtered.sort(key=lambda x: -x['st_sim'])
-    print(f"  [完成] {len(filtered)}结果, 耗时{time.time()-t_total:.2f}s",
+    n_valid = len(sorted_indices)
+
+    # fallback：候选太少时放宽
+    if n_valid < 5:
+        sorted_indices = np.argsort(-sims)
+        sorted_indices = sorted_indices[sims[sorted_indices] > -0.5]
+        sorted_indices = sorted_indices[sims[sorted_indices] > 0.3]
+        n_valid = len(sorted_indices)
+
+    step = max(1, n_valid // k)
+    selected_indices = sorted_indices[::step][:k]
+
+    valid_sims = sims[selected_indices]
+    valid_words = words[selected_indices]
+    n_candidates = len(valid_words)
+
+    print(f"  [候选池] domain={domain}, {n_candidates}词, "
+          f"sim范围[{valid_sims[-1]:.3f}, {valid_sims[0]:.3f}]",
           file=sys.stderr, flush=True)
-    return filtered
+
+    # Step 6: 指数机制采样
+    sensitivity = 0.5
+
+    log_probs = epsilon * valid_sims / (2 * sensitivity)
+    log_probs -= np.max(log_probs)
+    probs = np.exp(log_probs)
+    probs = probs / probs.sum()
+
+    max_prob = float(np.max(probs))
+    prob_entropy = float(-np.sum(probs * np.log(probs + 1e-10)))
+    max_entropy = np.log(n_candidates) if n_candidates > 1 else 1.0
+    norm_entropy = prob_entropy / max_entropy if max_entropy > 0 else 0.0
+
+    chosen_local_idx = np.random.choice(n_candidates, p=probs)
+    chosen_word = str(valid_words[chosen_local_idx])
+    chosen_sim = float(valid_sims[chosen_local_idx])
+
+    result = [{'new_word': chosen_word, 'st_sim': chosen_sim}]
+    for idx in np.argsort(-valid_sims):
+        w = str(valid_words[idx])
+        if w != chosen_word:
+            result.append({'new_word': w, 'st_sim': float(valid_sims[idx])})
+
+    elapsed = time.time() - t_total
+    mode = "ST类比" if analogy_orig else "直接"
+    print(f"  [完成] {mode} ε={epsilon}, chosen={chosen_word} "
+          f"(sim={chosen_sim:.3f}), 熵={norm_entropy:.3f}, "
+          f"{elapsed:.2f}s", file=sys.stderr, flush=True)
+
+    return result
 
 
+# ===== 服务主循环 =====
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind(('127.0.0.1', 9999))
 server.listen(5)
-print("监听9999...", flush=True)
+print("model_server 监听 9999...", flush=True)
 
 while True:
     conn, addr = server.accept()
@@ -124,20 +175,19 @@ while True:
         req = json.loads(data)
         word = req['word']
         epsilon = req.get('epsilon', 5.0)
-        domain = req.get('domain', 'medical')
-        threshold_lower = req.get('threshold_lower', 0.3)
-        threshold_upper = req.get('threshold_upper', 0.95)
+        domain = req.get('domain', 'disease')
+        analogy_orig = req.get('analogy_orig', None)
+        analogy_pert = req.get('analogy_pert', None)
 
-        print(f"\n查询: {word} (ε={epsilon})", file=sys.stderr, flush=True)
+        print(f"\n查询: {word} (ε={epsilon}, domain={domain})", file=sys.stderr, flush=True)
         result = {
             'word': word,
             'epsilon': epsilon,
-            'candidates': smart_neighbors(
-                word,
-                epsilon=epsilon,
-                threshold_lower=threshold_lower,
-                threshold_upper=threshold_upper,
-                domain=domain
+            'domain': domain,
+            'candidates': exponential_mechanism(
+                word, epsilon, domain=domain, k=20,
+                analogy_orig=analogy_orig,
+                analogy_pert=analogy_pert
             )
         }
         conn.sendall(json.dumps(result, ensure_ascii=False).encode('utf-8'))

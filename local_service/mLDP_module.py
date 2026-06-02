@@ -55,6 +55,11 @@ def _build_domain(value: int, radius: int) -> tuple[int, int]:
     """
     lo = max(0, value - radius)
     hi = value + radius
+    # 确保域至少包含原值
+    if lo > hi:
+        lo = hi = value
+    if lo == hi:
+        hi = lo + 1  # 至少给一个候选
     return lo, hi
 
 
@@ -126,6 +131,10 @@ class mLDPMechanism:
         else:
             radius = _adaptive_radius(x_int)
             lo, hi = _build_domain(x_int, radius)
+
+        # 防止空域（如 x_int=0 时 lo=hi=0）
+        if lo >= hi:
+            return x_int  # 无可选候选，返回原值
 
         candidates, probs = self._get_distribution(x_int, lo, hi)
         return int(np.random.choice(candidates, p=probs))

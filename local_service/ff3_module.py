@@ -1,5 +1,5 @@
 """
-ff3_module.py — 自适应多语言格式保持加密
+ff3_module.py-FPE加密算法
 
 修复说明
 --------
@@ -23,7 +23,6 @@ Bug2 (跨段不对齐):
 from __future__ import annotations
 
 import os
-import re
 import unicodedata
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
