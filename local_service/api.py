@@ -320,7 +320,7 @@ class NERAPI:
     def __init__(
         self,
         api_key: str = "a3cba7253c98456e85c785b91e6b4fc6.wh7yHcxeW6bxLCAI",
-        model: str = "glm-4-plus",
+        model: str = "GLM-4.7",
         base_url: str = "https://open.bigmodel.cn/api/paas/v4/",
         temperature: float = 0.1,
         top_p: float = 0.8,
