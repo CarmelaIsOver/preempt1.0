@@ -9,6 +9,7 @@ name_replacer_module.py — 姓名随机替换模块
 - 跨会话时，同一姓名会被替换为不同的假名（通过刷新会话实现）
 """
 
+import os
 import random
 import re
 from typing import Dict, Tuple, Optional
@@ -42,8 +43,9 @@ class NameReplacer:
     
     def _load_name_list(self, filename: str) -> list:
         """从文件加载姓名列表"""
+        filepath = os.path.join(os.path.dirname(__file__), filename)
         try:
-            with open(filename, 'r', encoding='utf-8') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
                 # 提取列表内容
                 if '[' in content and ']' in content:

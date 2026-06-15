@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anon — Prompt Desensitization</title>
+<style>
+  /* =========================================================================
+     Design System — Minimal, editorial, premium light UI
+     ========================================================================= */
+  :root {
+    /* Background hierarchy — warm-leaning light grays */
+    --bg-root: #f4f4f2;
+    --bg-surface: #fafaf9;
+    --bg-elevated: #f0f0ed;
+    --bg-overlay: #e9e9e5;
+
+    /* Borders — thin, subtle, barely visible */
+    --border-subtle: #e6e6e2;
+    --border-default: #dadad5;
+    --border-strong: #c5c5c0;
+
+    /* Text — high-contrast dark for primary, stepped grays for secondary */
+    --text-primary: #171717;
+    --text-secondary: #6b6b6f;
+    --text-tertiary: #8e8e93;
+    --text-disabled: #bfbfba;
+
+    /* Semantic — desaturated, muted, editorial-grade */
+    --red: #b88473;
+    --red-bg: rgba(184,132,115,0.08);
+    --red-border: rgba(184,132,115,0.16);
+    --blue: #7a8b9e;
+    --blue-bg: rgba(122,139,158,0.08);
+    --blue-border: rgba(122,139,158,0.16);
+    --green: #7d9b8a;
+    --green-bg: rgba(125,155,138,0.08);
+    --green-border: rgba(125,155,138,0.16);
+
+    /* Accent — near-black, restrained, premium */
+    --accent: #1c1c1e;
+    --accent-hover: #3d3d42;
+    --accent-bg: rgba(28,28,30,0.05);
+    --accent-border: rgba(28,28,30,0.12);
+
+    /* Replaced token indicator */
+    --replaced: #8b7f9e;
+    --replaced-bg: rgba(139,127,158,0.08);
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', 'Source Code Pro', monospace;
+    --text-xs: 0.7rem;
+    --text-sm: 0.8rem;
+    --text-base: 0.9rem;
+    --text-md: 1rem;
+    --text-lg: 1.15rem;
+
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-full: 9999px;
+
+    /* Shadows — barely there, elevation through subtlety */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-root);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* =========================================================================
+     Header — thin, clean, minimal
+     ========================================================================= */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 var(--space-6);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .header-left { display: flex; align-items: center; gap: var(--space-3); }
+  .logo {
+    font-family: var(--font-mono); font-size: var(--text-md); font-weight: 600;
+    color: var(--text-primary); letter-spacing: -0.3px;
+  }
+  .logo span { color: var(--accent); }
+  .nav-link {
+    font-family: var(--font-mono); font-size: var(--text-xs);
+    color: var(--text-tertiary); text-decoration: none;
+    padding: 4px 10px; border-radius: var(--radius-sm);
+    transition: all 0.15s;
+  }
+  .nav-link:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .nav-link.active { color: var(--text-primary); background: var(--accent-bg); }
+  .version-tag {
+    font-family: var(--font-mono); font-size: 0.65rem;
+    padding: 1px 6px; border-radius: var(--radius-full);
+    background: var(--bg-elevated); color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle);
+  }
+  .status-dot {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-tertiary);
+  }
+  .status-dot .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+
+  /* =========================================================================
+     Layout
+     ========================================================================= */
+  .container { max-width: 1480px; margin: 0 auto; padding: var(--space-6); }
+  .main-grid {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: var(--space-6);
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* =========================================================================
+     Card — white, barely elevated from page background
+     ========================================================================= */
+  .card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-subtle);
+  }
+  .card-header {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 10px var(--space-5);
+    background: var(--bg-surface);
+    font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary);
+    letter-spacing: 0.3px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .card-body { padding: var(--space-5); }
+
+  /* =========================================================================
+     Input: textarea
+     ========================================================================= */
+  .input-area textarea {
+    display: block; width: 100%; min-height: 200px; resize: vertical;
+    background: var(--bg-root); color: var(--text-primary);
+    border: 1px solid var(--border-default); border-radius: var(--radius-md);
+    padding: var(--space-4); font-family: var(--font-mono); font-size: var(--text-sm);
+    line-height: 1.8; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input-area textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .input-area textarea::placeholder { color: var(--text-disabled); }
+
+  .char-indicator {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: var(--space-2); font-family: var(--font-mono);
+    font-size: var(--text-xs); color: var(--text-tertiary);
+  }
+  .char-indicator .len { color: var(--text-secondary); }
+
+  /* Example chips */
+  .example-chips {
+    display: flex; gap: var(--space-2); margin-top: var(--space-3);
+    align-items: center;
+  }
+  .example-chips .label {
+    font-size: var(--text-xs); color: var(--text-tertiary);
+    margin-right: var(--space-1); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .chip {
+    font-size: var(--text-xs); padding: 5px 12px; border-radius: var(--radius-full);
+    background: transparent; color: var(--text-tertiary); font-weight: 400;
+    border: 1px solid var(--border-subtle); cursor: pointer;
+    transition: all 0.15s; font-family: var(--font-mono);
+  }
+  .chip:hover { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--border-default); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip.active {
+    background: #e3e3de; border-color: #b8b8b2; color: #111111; font-weight: 600;
+  }
+  .chip.active:hover { background: #dcdcd6; }
+
+  /* =========================================================================
+     Parameter controls
+     ========================================================================= */
+  .controls-stack { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4); }
+  .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  .ctrl-label {
+    font-size: var(--text-xs); color: var(--text-tertiary);
+    font-weight: 500; white-space: nowrap;
+  }
+  .eps-display {
+    font-family: var(--font-mono); font-size: var(--text-md); font-weight: 600;
+    color: var(--text-primary); min-width: 36px; text-align: right;
+  }
+
+  /* Range slider */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; max-width: 160px; height: 4px; border-radius: 4px;
+    background: var(--bg-overlay); outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    box-shadow: 0 0 0 4px var(--accent-bg);
+    transition: box-shadow 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { box-shadow: 0 0 0 7px var(--accent-bg); }
+
+  /* Toggle group */
+  .toggle-group {
+    display: flex; background: var(--bg-root);
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .toggle-btn {
+    padding: 5px 14px; font-size: var(--text-xs); font-family: var(--font-mono);
+    background: transparent; color: var(--text-tertiary); border: none;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; font-weight: 400;
+  }
+  .toggle-btn:not(:last-child) { border-right: 1px solid var(--border-subtle); }
+  .toggle-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
+  .toggle-btn.active {
+    background: #e3e3de; color: #111111; font-weight: 600;
+  }
+  .toggle-btn.active:hover { background: #dcdcd6; }
+
+  /* =========================================================================
+     Primary button — near-black, premium
+     ========================================================================= */
+  .btn-primary {
+    width: 100%; margin-top: var(--space-5);
+    padding: 11px 20px; border: none; border-radius: var(--radius-md);
+    background: var(--accent); color: #ffffff;
+    font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+    letter-spacing: 0.2px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  }
+  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 2px 12px rgba(28,28,30,0.15); }
+  .btn-primary:active { transform: scale(0.985); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
+  .btn-primary .spinner {
+    display: none; width: 16px; height: 16px; border: 2px solid transparent;
+    border-top-color: #ffffff; border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  .btn-primary.loading .spinner { display: inline-block; }
+  .btn-primary.loading .btn-text { opacity: 0.7; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .kb-hint {
+    text-align: center; font-family: var(--font-mono); font-size: 0.65rem;
+    color: var(--text-tertiary); margin-top: var(--space-2);
+  }
+  .kb-hint kbd {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-secondary);
+  }
+
+  /* =========================================================================
+     Summary stat cards — clean, number-forward
+     ========================================================================= */
+  .summary-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3); margin-bottom: var(--space-5);
+  }
+  @media (max-width: 700px) { .summary-row { grid-template-columns: 1fr; } }
+  .stat-card {
+    background: var(--bg-root);
+    border-radius: var(--radius-md);
+    padding: 14px var(--space-4);
+    display: flex; align-items: center; gap: var(--space-3);
+    border: 1px solid var(--border-subtle);
+  }
+  .stat-card .stat-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .stat-card .stat-dot.t1 { background: var(--red); }
+  .stat-card .stat-dot.t2 { background: var(--blue); }
+  .stat-card .stat-dot.t3 { background: var(--green); }
+  .stat-card .stat-info { display: flex; flex-direction: column; gap: 1px; }
+  .stat-card .stat-label { font-size: var(--text-xs); color: var(--text-tertiary); }
+  .stat-card .stat-value {
+    font-family: var(--font-mono); font-size: 1.35rem; font-weight: 700;
+    color: var(--text-primary); line-height: 1.2; letter-spacing: -0.5px;
+  }
+
+  /* =========================================================================
+     Comparison — side by side
+     ========================================================================= */
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: var(--space-4); margin-top: var(--space-1);
+  }
+  @media (max-width: 900px) { .comparison { grid-template-columns: 1fr; } }
+
+  .text-panel {
+    display: flex; flex-direction: column;
+  }
+  .text-panel-header {
+    display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);
+    font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 500;
+  }
+  .text-panel-header .indicator { width: 7px; height: 7px; border-radius: 50%; }
+  .text-panel-header .indicator.original { background: var(--text-tertiary); }
+  .text-panel-header .indicator.sanitized { background: var(--accent); }
+
+  .text-content {
+    background: var(--bg-root); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md); padding: var(--space-4);
+    min-height: 140px; flex: 1;
+    font-family: var(--font-mono); font-size: var(--text-sm);
+    line-height: 1.9; word-break: break-all; white-space: pre-wrap;
+    overflow-x: auto; overflow-y: auto;
+    color: var(--text-primary);
+  }
+
+  /* ---- Entity highlight tokens (original text) ---- */
+  .hl-t1 {
+    background: var(--red-bg); color: var(--red);
+    border-radius: 3px; padding: 1px 3px;
+  }
+  .hl-t2 {
+    background: var(--blue-bg); color: var(--blue);
+    border-radius: 3px; padding: 1px 3px;
+  }
+  .hl-t3 {
+    background: var(--green-bg); color: var(--green);
+    border-radius: 3px; padding: 1px 3px;
+  }
+
+  /* ---- Replaced token (sanitized text) ---- */
+  .hl-replaced {
+    background: var(--replaced-bg); color: var(--replaced);
+    border-radius: 3px; padding: 1px 3px;
+    border-bottom: 1px dashed rgba(139,127,158,0.45);
+    cursor: help; position: relative; transition: background 0.12s;
+  }
+  .hl-replaced:hover { background: rgba(139,127,158,0.16); }
+  .hl-replaced:hover::after {
+    content: attr(data-original);
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent); color: #ffffff;
+    padding: 4px 10px; border-radius: var(--radius-sm);
+    font-size: var(--text-xs); white-space: nowrap; z-index: 10;
+    pointer-events: none; font-family: var(--font-mono);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ---- Legend row ---- */
+  .legend-row {
+    display: flex; gap: var(--space-4); margin-top: var(--space-3);
+    font-size: var(--text-xs); color: var(--text-tertiary);
+  }
+  .legend-item { display: flex; align-items: center; gap: var(--space-1); }
+  .legend-dot { width: 7px; height: 7px; border-radius: 2px; }
+  .legend-dot.t1 { background: var(--red); }
+  .legend-dot.t2 { background: var(--blue); }
+  .legend-dot.t3 { background: var(--green); }
+
+  /* =========================================================================
+     Vault table — clean, minimal
+     ========================================================================= */
+  .vault { margin-top: var(--space-5); }
+  .vault .card-header { cursor: pointer; user-select: none; }
+  .vault .card-header .arrow {
+    font-size: 0.6rem; transition: transform 0.2s; display: inline-block;
+    color: var(--text-tertiary);
+  }
+  .vault.open .card-header .arrow { transform: rotate(90deg); }
+  .vault .card-body { display: none; }
+  .vault.open .card-body { display: block; }
+
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: var(--text-sm);
+  }
+  .data-table th {
+    position: sticky; top: 0;
+    text-align: left; padding: var(--space-2) var(--space-3);
+    color: var(--text-tertiary);
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+    letter-spacing: 0.3px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .data-table tbody tr { transition: background 0.1s; }
+  .data-table tbody tr:hover { background: var(--bg-elevated); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+
+  /* Tier badge — minimal dot + text */
+  .tier-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600;
+  }
+  .tier-badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  }
+  .tier-badge.t1 { color: var(--red); }
+  .tier-badge.t1::before { background: var(--red); }
+  .tier-badge.t2 { color: var(--blue); }
+  .tier-badge.t2::before { background: var(--blue); }
+  .tier-badge.t3 { color: var(--green); }
+  .tier-badge.t3::before { background: var(--green); }
+
+  .token-orig { font-family: var(--font-mono); color: var(--red); font-weight: 500; }
+  .token-repl { font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+  .method-desc { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+  /* =========================================================================
+     Expressions
+     ========================================================================= */
+  .expr-card {
+    background: var(--bg-root); border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);
+    border: 1px solid var(--border-subtle);
+  }
+  .expr-card:last-child { margin-bottom: 0; }
+  .expr-card .expr-title {
+    font-family: var(--font-mono); font-weight: 700; font-size: var(--text-sm);
+    color: var(--text-primary); margin-bottom: 2px;
+  }
+  .expr-card code {
+    font-family: var(--font-mono); font-size: var(--text-sm); color: var(--accent);
+  }
+  .expr-card .expr-meta {
+    font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-tertiary);
+    margin-top: var(--space-1);
+  }
+
+  /* =========================================================================
+     Empty state
+     ========================================================================= */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: var(--space-10) var(--space-5);
+    color: var(--text-tertiary); text-align: center; min-height: 220px;
+  }
+  .empty-icon {
+    width: 48px; height: 48px; margin-bottom: var(--space-3);
+    border-radius: 50%; background: var(--bg-elevated);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; color: var(--text-disabled);
+  }
+  .empty-text { font-size: var(--text-sm); color: var(--text-tertiary); max-width: 260px; }
+
+  /* =========================================================================
+     Error banner
+     ========================================================================= */
+  .error-banner {
+    background: var(--red-bg); border: 1px solid var(--red-border);
+    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+    margin-top: var(--space-3); font-size: var(--text-sm); color: var(--red);
+  }
+  .error-banner .hint {
+    font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2);
+  }
+  .error-banner code {
+    background: var(--bg-root); padding: 1px 6px; border-radius: 3px;
+    color: var(--text-secondary); font-family: var(--font-mono); font-size: var(--text-xs);
+  }
+
+  /* =========================================================================
+     Panel footer
+     ========================================================================= */
+  .panel-footer {
+    margin-top: var(--space-3); padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+    display: flex; align-items: center; gap: var(--space-4);
+    font-size: var(--text-xs); color: var(--text-tertiary);
+  }
+  .panel-footer .meta-item { display: flex; align-items: center; gap: var(--space-1); }
+  .panel-footer .meta-val { font-family: var(--font-mono); color: var(--text-secondary); font-weight: 600; }
+
+  /* =========================================================================
+     Utility
+     ========================================================================= */
+  .hidden { display: none !important; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp 0.35s ease-out; }
+</style>
+</head>
+<body>
+
+<!-- ====== Header ====== -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">Anon</div>
+    <span class="version-tag">Demo</span>
+    <a class="nav-link active" href="/">脱敏演示</a>
+    <a class="nav-link" href="/library">选题库 / 词库</a>
+  </div>
+  <div class="status-dot">
+    <div class="pulse"></div>
+    <span id="statusLabel">待机</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="main-grid">
+
+    <!-- ====== LEFT: Input + Controls ====== -->
+    <aside>
+      <!-- Text input -->
+      <div class="card">
+        <div class="card-header">输入文本</div>
+        <div class="card-body">
+          <div class="input-area">
+            <textarea id="inputText" placeholder="输入需要脱敏的提示词文本...">患者张伟，男，45岁，高血压病史5年，服用硝苯地平控制血压。血压145/95mmHg，空腹血糖6.8mmol/L。电话13812345678，身份证110101198001011234。</textarea>
+          </div>
+          <div class="char-indicator">
+            <span><span class="len" id="charCount">0</span> 字符</span>
+          </div>
+          <div class="example-chips">
+            <span class="label">示例</span>
+            <button class="chip active" onclick="loadExample('medical')">医疗病历</button>
+            <button class="chip" onclick="loadExample('calc')">数值计算</button>
+            <button class="chip" onclick="loadExample('mixed')">混合场景</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parameters -->
+      <div class="card" style="margin-top:var(--space-5)">
+        <div class="card-header">脱敏参数</div>
+        <div class="card-body">
+          <div class="controls-stack">
+            <div class="ctrl-row">
+              <span class="ctrl-label">隐私预算 ε</span>
+              <input type="range" id="epsilon" min="0.1" max="5.0" step="0.1" value="1.0">
+              <span class="eps-display" id="epsVal">1.0</span>
+            </div>
+            <div class="ctrl-row">
+              <span class="ctrl-label">NER 引擎</span>
+              <div class="toggle-group" id="nerToggle">
+                <button class="toggle-btn active" data-value="local">本地规则引擎</button>
+                <button class="toggle-btn" data-value="cloud">GLM-4.7</button>
+              </div>
+            </div>
+          </div>
+          <button class="btn-primary" id="processBtn" onclick="processText()">
+            <span class="spinner"></span>
+            <span class="btn-text">执行脱敏</span>
+          </button>
+          <div class="kb-hint">或按 <kbd>Ctrl</kbd> + <kbd>Enter</kbd></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ====== RIGHT: Results ====== -->
+    <main>
+      <div class="card" id="resultsCard">
+        <div class="card-header">
+          脱敏结果
+          <span style="margin-left:auto;font-size:var(--text-xs);color:var(--text-tertiary);font-family:var(--font-mono);display:none" id="timeDisplay"></span>
+        </div>
+        <div class="card-body">
+
+          <!-- Empty state -->
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">&#9670;</div>
+            <div class="empty-text">输入文本并点击"执行脱敏"<br>查看脱敏对比结果</div>
+          </div>
+
+          <!-- Results content -->
+          <div id="resultsContent" class="hidden">
+            <!-- Summary cards -->
+            <div class="summary-row">
+              <div class="stat-card">
+                <span class="stat-dot t1"></span>
+                <div class="stat-info">
+                  <span class="stat-label">T1 · 身份信息</span>
+                  <span class="stat-value" id="t1Count">0</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <span class="stat-dot t2"></span>
+                <div class="stat-info">
+                  <span class="stat-label">T2 · 数值扰动</span>
+                  <span class="stat-value" id="t2Count">0</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <span class="stat-dot t3"></span>
+                <div class="stat-info">
+                  <span class="stat-label">T3 · 领域实体</span>
+                  <span class="stat-value" id="t3Count">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Side-by-side comparison -->
+            <div class="comparison">
+              <div class="text-panel">
+                <div class="text-panel-header">
+                  <span class="indicator original"></span> 原始文本
+                </div>
+                <div class="text-content" id="originalDisplay"></div>
+              </div>
+              <div class="text-panel">
+                <div class="text-panel-header">
+                  <span class="indicator sanitized"></span> 脱敏后文本
+                </div>
+                <div class="text-content" id="sanitizedDisplay"></div>
+              </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend-row">
+              <span class="legend-item"><span class="legend-dot t1"></span> T1 身份信息</span>
+              <span class="legend-item"><span class="legend-dot t2"></span> T2 数值</span>
+              <span class="legend-item"><span class="legend-dot t3"></span> T3 领域实体</span>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:4px">
+                <span style="border-bottom:1px dashed var(--replaced);padding-bottom:1px">下划线</span> = 已脱敏
+              </span>
+            </div>
+
+            <!-- Footer stats -->
+            <div class="panel-footer" id="statsBar">
+              <div class="meta-item">实体总数 <span class="meta-val" id="entityTotal">0</span></div>
+              <div class="meta-item">表达式 <span class="meta-val" id="exprTotal">0</span></div>
+              <div class="meta-item">ε = <span class="meta-val" id="epsUsed">1.0</span></div>
+            </div>
+
+            <div id="errorBox"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vault -->
+      <div class="card vault open" id="vaultPanel" style="margin-top:var(--space-5)">
+        <div class="card-header" onclick="toggleVault()">
+          <span class="arrow">&#9654;</span> 脱敏映射表 Vault
+          <span style="margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-tertiary)" id="vaultCount">—</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div style="max-height:400px;overflow-y:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:70px">层级</th>
+                  <th style="width:100px">类型</th>
+                  <th style="width:auto">原始实体</th>
+                  <th style="width:auto">脱敏结果</th>
+                  <th style="width:140px">方法</th>
+                </tr>
+              </thead>
+              <tbody id="vaultBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expressions -->
+      <div class="card vault" id="exprPanel" style="margin-top:var(--space-5)">
+        <div class="card-header" onclick="toggleExpr()">
+          <span class="arrow">&#9654;</span> 数值表达式关系 DAG
+          <span style="margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-tertiary)" id="exprCount">—</span>
+        </div>
+        <div class="card-body" id="exprList"></div>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<script>
+// ===========================================================================
+// Data
+// ===========================================================================
+const EXAMPLES = {
+  medical: '患者张伟，男，45岁，高血压病史5年，服用硝苯地平控制血压。血压145/95mmHg，空腹血糖6.8mmol/L。电话13812345678，身份证110101198001011234。主诉：胸闷、心悸一周，加重伴头晕两天。',
+  calc:    '张三年薪120万，其中基本工资100万，绩效奖金20万。李四月薪3万元，季度奖金是月薪的30%，年收入为月薪的12倍加季度奖金的4倍。联系方式：zhangsan@example.com',
+  mixed:   '患者李明，58岁，2型糖尿病，空腹血糖12.5mmol/L，糖化血红蛋白7.2%。单价二甲双胍15元，数量5盒，总价75元。主治医生王芳，联系电话13900001111。',
+};
+
+const API = window.location.protocol.startsWith('file')
+  ? 'http://127.0.0.1:8000'
+  : window.location.origin;
+
+const T1_LABELS = new Set(['PERSON','PHONE','ID','EMAIL','ORG','LOCATION','IP','URL','ENTITY']);
+const T2_LABELS = new Set(['AGE','SALARY','AMOUNT','COUNT','WEIGHT','BLOOD_SUGAR','BLOOD_PRESSURE','MEDICAL_VAL','YEAR','DATE_NUM','NUM','PERCENT','NUM_VALUE']);
+
+// ===========================================================================
+// Event bindings
+// ===========================================================================
+document.getElementById('inputText').addEventListener('input', updateCharCount);
+document.getElementById('inputText').addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'Enter') processText();
+});
+document.getElementById('epsilon').addEventListener('input', function() {
+  document.getElementById('epsVal').textContent = parseFloat(this.value).toFixed(1);
+});
+document.querySelectorAll('#nerToggle .toggle-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#nerToggle .toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+    this.classList.add('active');
+  });
+});
+updateCharCount();
+
+// ===========================================================================
+// Functions
+// ===========================================================================
+function updateCharCount() {
+  document.getElementById('charCount').textContent = document.getElementById('inputText').value.length;
+}
+
+function loadExample(name) {
+  document.getElementById('inputText').value = EXAMPLES[name];
+  var chips = document.querySelectorAll('.chip');
+  chips.forEach(function(c) { c.classList.remove('active'); });
+  event.target.classList.add('active');
+  updateCharCount();
+}
+
+function getNerMode() {
+  var active = document.querySelector('#nerToggle .toggle-btn.active');
+  return active ? active.dataset.value === 'local' : true;
+}
+
+function toggleVault() {
+  document.getElementById('vaultPanel').classList.toggle('open');
+}
+
+function toggleExpr() {
+  document.getElementById('exprPanel').classList.toggle('open');
+}
+
+// ===========================================================================
+// Main process
+// ===========================================================================
+async function processText() {
+  var text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+
+  var epsilon = parseFloat(document.getElementById('epsilon').value);
+  var useLocalNer = getNerMode();
+  var btn = document.getElementById('processBtn');
+  var errorBox = document.getElementById('errorBox');
+  var emptyState = document.getElementById('emptyState');
+  var resultsContent = document.getElementById('resultsContent');
+
+  btn.classList.add('loading');
+  btn.disabled = true;
+  errorBox.innerHTML = '';
+
+  var startTime = performance.now();
+
+  try {
+    var resp = await fetch(API + '/api/sanitize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, epsilon: epsilon, use_local_ner: useLocalNer }),
+    });
+
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      throw new Error(err.error || 'HTTP ' + resp.status);
+    }
+
+    var data = await resp.json();
+    var elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+    document.getElementById('statusLabel').textContent = elapsed + 's';
+    document.getElementById('timeDisplay').textContent = elapsed + 's';
+    document.getElementById('timeDisplay').style.display = 'inline';
+
+    emptyState.classList.add('hidden');
+    resultsContent.classList.remove('hidden');
+    resultsContent.classList.add('fade-up');
+    renderResults(data, text);
+  } catch (e) {
+    resultsContent.classList.remove('hidden');
+    resultsContent.classList.add('fade-up');
+    emptyState.classList.add('hidden');
+    errorBox.innerHTML =
+      '<div class="error-banner">' +
+        '连接失败: ' + escHtml(e.message) +
+        '<div class="hint">请确认后端已启动: <code>python local_service/web_server.py --port 8000</code></div>' +
+      '</div>';
+    document.getElementById('statusLabel').textContent = '离线';
+    document.getElementById('vaultPanel').classList.add('hidden');
+    document.getElementById('exprPanel').classList.add('hidden');
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    setTimeout(function() { resultsContent.classList.remove('fade-up'); }, 400);
+  }
+}
+
+// ===========================================================================
+// Render
+// ===========================================================================
+function renderResults(data, rawText) {
+  var stats = data.stats;
+  document.getElementById('t1Count').textContent = stats.t1_count;
+  document.getElementById('t2Count').textContent = stats.t2_count;
+  document.getElementById('t3Count').textContent = stats.t3_count;
+
+  // Footer stats
+  document.getElementById('entityTotal').textContent = stats.entity_count;
+  document.getElementById('exprTotal').textContent = stats.expression_count;
+  document.getElementById('epsUsed').textContent = parseFloat(document.getElementById('epsilon').value).toFixed(1);
+
+  // Highlight original
+  var highlights = buildHighlights(rawText, data.entities || []);
+  document.getElementById('originalDisplay').innerHTML = renderHighlighted(rawText, highlights);
+
+  // Highlight sanitized
+  document.getElementById('sanitizedDisplay').innerHTML = renderSanitized(data.sanitized, data.vault || []);
+
+  // Vault
+  var vault = data.vault || [];
+  var vaultPanel = document.getElementById('vaultPanel');
+  var vaultBody = document.getElementById('vaultBody');
+  if (vault.length > 0) {
+    vaultPanel.classList.remove('hidden');
+    document.getElementById('vaultCount').textContent = vault.length + ' 项';
+    vaultBody.innerHTML = vault.map(function(v) {
+      return '<tr>' +
+        '<td><span class="tier-badge ' + v.tier.toLowerCase() + '">' + v.tier + '</span></td>' +
+        '<td style="color:var(--text-tertiary);font-size:var(--text-xs)">' + escHtml(v.type) + '</td>' +
+        '<td><span class="token-orig">' + escHtml(v.original) + '</span></td>' +
+        '<td><span class="token-repl">' + escHtml(v.replacement) + '</span></td>' +
+        '<td><span class="method-desc">' + getMethodName(v.type) + '</span></td>' +
+      '</tr>';
+    }).join('');
+  } else {
+    vaultPanel.classList.add('hidden');
+  }
+
+  // Expressions
+  var exprs = data.expressions || [];
+  var exprPanel = document.getElementById('exprPanel');
+  if (exprs.length > 0) {
+    exprPanel.classList.remove('hidden');
+    exprPanel.classList.add('open');
+    document.getElementById('exprCount').textContent = exprs.length + ' 项';
+    document.getElementById('exprList').innerHTML = exprs.map(function(e) {
+      return '<div class="expr-card">' +
+        '<div class="expr-title">' + escHtml(e.token || '?') + '</div>' +
+        '<code>' + escHtml(e.expression || '') + '</code>' +
+        '<div class="expr-meta">依赖: [' + (e.depends_on || []).join(', ') + '] &rarr; 输出: ' + escHtml(e.output_token || '') + (e.description ? ' — ' + escHtml(e.description) : '') + '</div>' +
+      '</div>';
+    }).join('');
+  } else {
+    exprPanel.classList.add('hidden');
+  }
+}
+
+// ===========================================================================
+// Highlighting
+// ===========================================================================
+function buildHighlights(text, entities) {
+  var result = [];
+  entities.forEach(function(ent) {
+    var token = ent.token || ent.text || '';
+    if (!token) return;
+    var label = ent.label || '';
+    var tier = 't1';
+    if (T2_LABELS.has(label)) tier = 't2';
+    else if (!T1_LABELS.has(label) && label !== '') tier = 't3';
+
+    var idx = 0;
+    while ((idx = text.indexOf(token, idx)) !== -1) {
+      result.push({ start: idx, end: idx + token.length, tier: tier, token: token, label: label });
+      idx += token.length;
+    }
+  });
+  result.sort(function(a, b) { return a.start - b.start; });
+  var merged = [];
+  result.forEach(function(h) {
+    if (merged.length === 0 || h.start >= merged[merged.length - 1].end) merged.push(h);
+  });
+  return merged;
+}
+
+function renderHighlighted(text, highlights) {
+  if (!highlights.length) return escHtml(text);
+  var out = '', last = 0;
+  highlights.forEach(function(h) {
+    out += escHtml(text.slice(last, h.start));
+    out += '<span class="hl-' + h.tier + '" title="' + escAttr(h.label + ': ' + h.token) + '">' + escHtml(text.slice(h.start, h.end)) + '</span>';
+    last = h.end;
+  });
+  out += escHtml(text.slice(last));
+  return out;
+}
+
+function renderSanitized(sanitized, vault) {
+  var spans = [];
+  vault.forEach(function(v) {
+    var target = v.replacement || '';
+    if (!target) return;
+    var idx = 0;
+    while ((idx = sanitized.indexOf(target, idx)) !== -1) {
+      spans.push({ start: idx, end: idx + target.length, tier: v.tier, original: v.original });
+      idx += target.length;
+    }
+  });
+  spans.sort(function(a, b) { return a.start - b.start; });
+  var merged = [];
+  spans.forEach(function(s) {
+    if (merged.length === 0 || s.start >= merged[merged.length - 1].end) merged.push(s);
+  });
+
+  if (!merged.length) return escHtml(sanitized);
+
+  var out = '', last = 0;
+  merged.forEach(function(s) {
+    out += escHtml(sanitized.slice(last, s.start));
+    out += '<span class="hl-replaced" data-original="' + escAttr(s.original) + '">' + escHtml(sanitized.slice(s.start, s.end)) + '</span>';
+    last = s.end;
+  });
+  out += escHtml(sanitized.slice(last));
+  return out;
+}
+
+// ===========================================================================
+// Helpers
+// ===========================================================================
+function getMethodName(type) {
+  if (type.startsWith('t1_name')) return '确定性哈希假名';
+  if (type.startsWith('t1_fpe'))  return 'FF3 格式保持加密';
+  if (type.startsWith('t2_dag'))  return 'DAG 约束传播';
+  if (type.startsWith('t2_mldp')) return 'mLDP 指数机制';
+  if (type.startsWith('t3_disease')) return '疾病语义替换';
+  if (type.startsWith('t3_drug'))    return '药物语义替换';
+  if (type.startsWith('t3_drug_cascade'))   return '级联替换(药物)';
+  if (type.startsWith('t3_symptom_cascade')) return '级联替换(症状)';
+  return type;
+}
+
+function escHtml(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function escAttr(s) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>

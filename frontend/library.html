@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>选题库 / 词库管理 — Anon</title>
+<style>
+  /* =========================================================================
+     Design System — shared with main page (identical tokens)
+     ========================================================================= */
+  :root {
+    --bg-root: #f4f4f2;
+    --bg-surface: #fafaf9;
+    --bg-elevated: #f0f0ed;
+    --bg-overlay: #e9e9e5;
+    --border-subtle: #e6e6e2;
+    --border-default: #dadad5;
+    --border-strong: #c5c5c0;
+    --text-primary: #171717;
+    --text-secondary: #6b6b6f;
+    --text-tertiary: #8e8e93;
+    --text-disabled: #bfbfba;
+    --red: #b88473;
+    --red-bg: rgba(184,132,115,0.08);
+    --red-border: rgba(184,132,115,0.16);
+    --blue: #7a8b9e;
+    --blue-bg: rgba(122,139,158,0.08);
+    --blue-border: rgba(122,139,158,0.16);
+    --green: #7d9b8a;
+    --green-bg: rgba(125,155,138,0.08);
+    --green-border: rgba(125,155,138,0.16);
+    --accent: #1c1c1e;
+    --accent-hover: #3d3d42;
+    --accent-bg: rgba(28,28,30,0.05);
+    --accent-border: rgba(28,28,30,0.12);
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    --text-xs: 0.7rem; --text-sm: 0.8rem; --text-base: 0.9rem;
+    --text-md: 1rem; --text-lg: 1.15rem;
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 10px; --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-root);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* =========================================================================
+     Header
+     ========================================================================= */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 var(--space-6);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .header-left { display: flex; align-items: center; gap: var(--space-4); }
+  .logo {
+    font-family: var(--font-mono); font-size: var(--text-md); font-weight: 600;
+    color: var(--text-primary); letter-spacing: -0.3px;
+    text-decoration: none;
+  }
+  .logo span { color: var(--accent); }
+  .nav-link {
+    font-family: var(--font-mono); font-size: var(--text-xs);
+    color: var(--text-tertiary); text-decoration: none;
+    padding: 4px 10px; border-radius: var(--radius-sm);
+    transition: all 0.15s;
+  }
+  .nav-link:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .nav-link.active { color: var(--text-primary); background: var(--accent-bg); }
+  .version-tag {
+    font-family: var(--font-mono); font-size: 0.65rem;
+    padding: 1px 6px; border-radius: var(--radius-full);
+    background: var(--bg-elevated); color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* =========================================================================
+     Layout
+     ========================================================================= */
+  .container { max-width: 1400px; margin: 0 auto; padding: var(--space-6); }
+
+  /* Page header */
+  .page-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: var(--space-6); gap: var(--space-4);
+  }
+  .page-header h1 {
+    font-size: 1.25rem; font-weight: 700; color: var(--text-primary);
+    letter-spacing: -0.3px; margin-bottom: 2px;
+  }
+  .page-header .subtitle {
+    font-size: var(--text-sm); color: var(--text-tertiary);
+  }
+  @media (max-width: 700px) { .page-header { flex-direction: column; } }
+
+  /* =========================================================================
+     Card
+     ========================================================================= */
+  .card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-subtle);
+  }
+  .card-header {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 10px var(--space-5);
+    background: var(--bg-surface);
+    font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary);
+    letter-spacing: 0.3px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .card-body { padding: var(--space-5); }
+
+  /* =========================================================================
+     Stat cards
+     ========================================================================= */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3); margin-bottom: var(--space-6);
+  }
+  @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 550px) { .stats-row { grid-template-columns: 1fr; } }
+  .stat-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    padding: 14px var(--space-4);
+    display: flex; align-items: center; gap: var(--space-3);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-card .stat-icon {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0;
+  }
+  .stat-card .stat-icon.topics { background: var(--accent-bg); color: var(--accent); }
+  .stat-card .stat-icon.active { background: var(--green-bg); color: var(--green); }
+  .stat-card .stat-icon.lexicon { background: var(--blue-bg); color: var(--blue); }
+  .stat-card .stat-icon.high { background: var(--red-bg); color: var(--red); }
+  .stat-card .stat-info { display: flex; flex-direction: column; gap: 1px; }
+  .stat-card .stat-label { font-size: var(--text-xs); color: var(--text-tertiary); }
+  .stat-card .stat-value {
+    font-family: var(--font-mono); font-size: 1.3rem; font-weight: 700;
+    color: var(--text-primary); line-height: 1.2; letter-spacing: -0.5px;
+  }
+
+  /* =========================================================================
+     Toolbar (search + filters + action button)
+     ========================================================================= */
+  .toolbar {
+    display: flex; align-items: center; gap: var(--space-3);
+    margin-bottom: var(--space-4); flex-wrap: wrap;
+  }
+  .toolbar .search-input {
+    flex: 1; min-width: 180px; max-width: 300px;
+    padding: 7px 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
+    background: var(--bg-root); color: var(--text-primary);
+    font-family: var(--font-mono); font-size: var(--text-xs);
+    outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .toolbar .search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .toolbar .search-input::placeholder { color: var(--text-disabled); }
+  .toolbar select {
+    padding: 7px 28px 7px 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
+    background: var(--bg-root); color: var(--text-primary);
+    font-family: var(--font-mono); font-size: var(--text-xs);
+    outline: none; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238e8e93'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    transition: border-color 0.15s;
+  }
+  .toolbar select:focus { border-color: var(--accent); }
+  .toolbar .spacer { flex: 1; }
+
+  /* Primary / secondary buttons */
+  .btn-primary {
+    padding: 7px 16px; border: none; border-radius: var(--radius-sm);
+    background: var(--accent); color: #ffffff;
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+    cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+    white-space: nowrap; letter-spacing: 0.2px;
+  }
+  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 2px 10px rgba(28,28,30,0.15); }
+  .btn-secondary {
+    padding: 7px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    background: var(--bg-surface); color: var(--text-secondary);
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-secondary:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--bg-elevated); }
+  .btn-danger {
+    padding: 7px 14px; border: 1px solid var(--red-border); border-radius: var(--radius-sm);
+    background: var(--bg-surface); color: var(--red);
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-danger:hover { background: var(--red-bg); }
+
+  .btn-sm { padding: 4px 10px; font-size: 0.67rem; }
+
+  /* =========================================================================
+     Data table
+     ========================================================================= */
+  .table-wrap { overflow-x: auto; }
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: var(--text-sm);
+  }
+  .data-table th {
+    text-align: left; padding: var(--space-2) var(--space-3);
+    color: var(--text-tertiary);
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+    letter-spacing: 0.3px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-default);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+  }
+  .data-table tbody tr { transition: background 0.1s; }
+  .data-table tbody tr:hover { background: var(--bg-elevated); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table .actions { display: flex; gap: var(--space-1); flex-wrap: nowrap; }
+
+  /* Cell styles */
+  .cell-name { font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); }
+  .cell-desc { color: var(--text-tertiary); font-size: var(--text-xs); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-mono { font-family: var(--font-mono); color: var(--text-secondary); font-size: var(--text-xs); }
+  .cell-time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-tertiary); }
+
+  /* =========================================================================
+     Badges
+     ========================================================================= */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 0.65rem; font-weight: 600;
+    padding: 2px 8px; border-radius: var(--radius-full);
+    white-space: nowrap;
+  }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .badge.active { background: var(--green-bg); color: var(--green); }
+  .badge.active::before { background: var(--green); }
+  .badge.draft { background: var(--blue-bg); color: var(--blue); }
+  .badge.draft::before { background: var(--blue); }
+  .badge.disabled { background: var(--red-bg); color: var(--red); }
+  .badge.disabled::before { background: var(--red); }
+  .badge.available { background: var(--green-bg); color: var(--green); }
+  .badge.available::before { background: var(--green); }
+  .badge.updating { background: var(--blue-bg); color: var(--blue); }
+  .badge.updating::before { background: var(--blue); }
+  .badge.sensitivity-low { background: var(--green-bg); color: var(--green); }
+  .badge.sensitivity-low::before { background: var(--green); }
+  .badge.sensitivity-mid { background: var(--blue-bg); color: var(--blue); }
+  .badge.sensitivity-mid::before { background: var(--blue); }
+  .badge.sensitivity-high { background: var(--red-bg); color: var(--red); }
+  .badge.sensitivity-high::before { background: var(--red); }
+
+  .type-tag {
+    font-family: var(--font-mono); font-size: var(--text-xs);
+    color: var(--text-secondary); background: var(--bg-elevated);
+    padding: 2px 8px; border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+
+  /* =========================================================================
+     Empty state
+     ========================================================================= */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: var(--space-10) var(--space-5);
+    color: var(--text-tertiary); text-align: center; min-height: 160px;
+  }
+  .empty-icon {
+    width: 40px; height: 40px; margin-bottom: var(--space-2);
+    border-radius: 50%; background: var(--bg-elevated);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: var(--text-disabled);
+  }
+  .empty-text { font-size: var(--text-sm); color: var(--text-tertiary); }
+
+  /* =========================================================================
+     Modal / Drawer
+     ========================================================================= */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.25);
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-surface); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg); border: 1px solid var(--border-subtle);
+    width: 520px; max-width: 94vw; max-height: 85vh; overflow-y: auto;
+    animation: modalIn 0.18s ease-out;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .modal-header h2 { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); }
+  .modal-close {
+    width: 28px; height: 28px; border: none; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-tertiary); cursor: pointer;
+    font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  .modal-close:hover { background: var(--bg-elevated); color: var(--text-primary); }
+  .modal-body { padding: var(--space-5); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* Form fields */
+  .form-group { margin-bottom: var(--space-4); }
+  .form-group:last-child { margin-bottom: 0; }
+  .form-label {
+    display: block; font-size: var(--text-xs); color: var(--text-secondary);
+    font-weight: 500; margin-bottom: var(--space-1);
+  }
+  .form-input, .form-select, .form-textarea {
+    display: block; width: 100%; padding: 8px 10px;
+    border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    background: var(--bg-root); color: var(--text-primary);
+    font-family: var(--font-mono); font-size: var(--text-sm);
+    outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .form-select { appearance: none; cursor: pointer; }
+  .form-textarea { min-height: 70px; resize: vertical; }
+  .form-input::placeholder, .form-textarea::placeholder { color: var(--text-disabled); }
+
+  /* =========================================================================
+     Confirm dialog
+     ========================================================================= */
+  .confirm-overlay {
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.3);
+    align-items: center; justify-content: center;
+  }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box {
+    background: var(--bg-surface); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg); border: 1px solid var(--border-subtle);
+    width: 380px; max-width: 92vw; padding: var(--space-6);
+    text-align: center; animation: modalIn 0.18s ease-out;
+  }
+  .confirm-box h3 { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); margin-bottom: var(--space-2); }
+  .confirm-box p { font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-5); }
+  .confirm-actions { display: flex; justify-content: center; gap: var(--space-3); }
+
+  /* =========================================================================
+     Toast
+     ========================================================================= */
+  .toast-container {
+    position: fixed; bottom: var(--space-6); right: var(--space-6); z-index: 400;
+    display: flex; flex-direction: column; gap: var(--space-2);
+    pointer-events: none;
+  }
+  .toast {
+    padding: 10px 18px; border-radius: var(--radius-md);
+    background: var(--accent); color: #ffffff;
+    font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500;
+    box-shadow: var(--shadow-md);
+    animation: toastIn 0.25s ease-out, toastOut 0.2s ease-in forwards;
+    animation-delay: 0s, 1.8s;
+    pointer-events: auto; max-width: 360px;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+  .toast.success { background: #4a6958; }
+  .toast.warning { background: #8b7355; }
+
+  /* =========================================================================
+     Section spacing
+     ========================================================================= */
+  .section { margin-bottom: var(--space-6); }
+  .section:last-child { margin-bottom: 0; }
+
+  /* =========================================================================
+     Responsive helpers
+     ========================================================================= */
+  @media (max-width: 700px) {
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .toolbar .search-input { max-width: none; }
+    .toolbar .spacer { display: none; }
+  }
+
+  /* =========================================================================
+     Card header action button
+     ========================================================================= */
+  .card-header-action {
+    margin-left: auto; font-size: var(--text-xs); font-weight: 500;
+    color: var(--text-secondary); cursor: pointer; border: none;
+    background: transparent; padding: 2px 6px; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); transition: all 0.12s;
+  }
+  .card-header-action:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+  /* =========================================================================
+     Upload drop zone
+     ========================================================================= */
+  .upload-zone {
+    border: 2px dashed var(--border-default); border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-5); text-align: center; cursor: pointer;
+    transition: all 0.15s; background: var(--bg-root);
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: var(--accent-bg); }
+  .upload-zone.has-file { border-style: solid; border-color: var(--border-strong); background: var(--bg-elevated); }
+  .upload-zone .upload-icon {
+    font-size: 1.6rem; color: var(--text-disabled); margin-bottom: var(--space-2);
+    transition: color 0.15s;
+  }
+  .upload-zone:hover .upload-icon, .upload-zone.dragover .upload-icon { color: var(--accent); }
+  .upload-zone .upload-text { font-size: var(--text-sm); color: var(--text-secondary); }
+  .upload-zone .upload-hint { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-1); }
+  .upload-zone .file-info {
+    display: none; margin-top: var(--space-3); font-family: var(--font-mono);
+    font-size: var(--text-xs); color: var(--text-primary);
+    align-items: center; justify-content: center; gap: var(--space-2);
+  }
+  .upload-zone.has-file .file-info { display: flex; }
+  .upload-zone.has-file .upload-text { display: none; }
+  .upload-zone.has-file .upload-hint { display: none; }
+  .file-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: var(--radius-sm);
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-secondary);
+  }
+
+  /* =========================================================================
+     Upload progress bar
+     ========================================================================= */
+  .progress-bar-wrap {
+    display: none; height: 4px; background: var(--bg-overlay);
+    border-radius: 2px; overflow: hidden; margin-top: var(--space-3);
+  }
+  .progress-bar-wrap.active { display: block; }
+  .progress-bar-fill {
+    height: 100%; width: 0%; background: var(--accent);
+    border-radius: 2px; transition: width 0.25s ease-out;
+  }
+  .progress-label {
+    display: none; font-family: var(--font-mono); font-size: var(--text-xs);
+    color: var(--text-tertiary); margin-top: var(--space-1); text-align: center;
+  }
+  .progress-label.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ====== Header ====== -->
+<header class="header">
+  <div class="header-left">
+    <a class="logo" href="/">Anon</a>
+    <span class="version-tag">Demo</span>
+    <a class="nav-link" href="/">脱敏演示</a>
+    <a class="nav-link active" href="/library">选题库 / 词库</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ====== Page Header ====== -->
+  <div class="page-header">
+    <div>
+      <h1>选题库 / 词库管理</h1>
+      <p class="subtitle">管理脱敏选题场景与词库资源</p>
+    </div>
+    <button class="btn-primary" onclick="openUploadModal()">+ 上传词库</button>
+  </div>
+
+  <!-- ====== Stats Row ====== -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon topics">&#9632;</div>
+      <div class="stat-info">
+        <span class="stat-label">选题总数</span>
+        <span class="stat-value" id="statTopicTotal">0</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon active">&#9632;</div>
+      <div class="stat-info">
+        <span class="stat-label">启用中</span>
+        <span class="stat-value" id="statTopicActive">0</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon lexicon">&#9632;</div>
+      <div class="stat-info">
+        <span class="stat-label">词库总数</span>
+        <span class="stat-value" id="statLexiconTotal">0</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon high">&#9632;</div>
+      <div class="stat-info">
+        <span class="stat-label">高敏词库</span>
+        <span class="stat-value" id="statLexiconHigh">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Topic Library ====== -->
+  <div class="section">
+    <div class="card">
+      <div class="card-header">选题库<button class="card-header-action" onclick="openTopicModal()">+ 新增选题</button></div>
+      <div class="card-body">
+        <div class="toolbar">
+          <input type="text" class="search-input" id="topicSearch" placeholder="搜索选题名称..." oninput="renderTopics()">
+          <select id="topicTypeFilter" onchange="renderTopics()">
+            <option value="">全部类型</option>
+            <option value="医疗病历">医疗病历</option>
+            <option value="金融文本">金融文本</option>
+            <option value="客服对话">客服对话</option>
+            <option value="法律文书">法律文书</option>
+            <option value="教育数据">教育数据</option>
+            <option value="自定义场景">自定义场景</option>
+          </select>
+          <select id="topicStatusFilter" onchange="renderTopics()">
+            <option value="">全部状态</option>
+            <option value="启用中">启用中</option>
+            <option value="草稿">草稿</option>
+            <option value="已停用">已停用</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>选题名称</th>
+                <th>类型</th>
+                <th>描述</th>
+                <th>关联词库</th>
+                <th>创建时间</th>
+                <th>状态</th>
+                <th style="width:160px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="topicTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Lexicon Resources ====== -->
+  <div class="section">
+    <div class="card">
+      <div class="card-header">词库资源</div>
+      <div class="card-body">
+        <div class="toolbar">
+          <input type="text" class="search-input" id="lexiconSearch" placeholder="搜索词库名称..." oninput="renderLexicons()">
+          <select id="lexiconTypeFilter" onchange="renderLexicons()">
+            <option value="">全部类型</option>
+            <option value="人名词库">人名词库</option>
+            <option value="电话词库">电话词库</option>
+            <option value="地址词库">地址词库</option>
+            <option value="疾病词库">疾病词库</option>
+            <option value="药品词库">药品词库</option>
+            <option value="金额词库">金额词库</option>
+            <option value="综合词库">综合词库</option>
+            <option value="自定义词库">自定义词库</option>
+          </select>
+          <select id="lexiconSensitivityFilter" onchange="renderLexicons()">
+            <option value="">全部等级</option>
+            <option value="高">高敏感</option>
+            <option value="中">中敏感</option>
+            <option value="低">低敏感</option>
+          </select>
+          <select id="lexiconStatusFilter" onchange="renderLexicons()">
+            <option value="">全部状态</option>
+            <option value="可用">可用</option>
+            <option value="更新中">更新中</option>
+            <option value="已停用">已停用</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>词库名称</th>
+                <th>类型</th>
+                <th>词条数量</th>
+                <th>敏感等级</th>
+                <th>更新时间</th>
+                <th>文件大小</th>
+                <th>状态</th>
+                <th style="width:120px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="lexiconTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ====== Topic Modal ====== -->
+<div class="modal-overlay" id="topicModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="topicModalTitle">新增选题</h2>
+      <button class="modal-close" onclick="closeTopicModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">选题名称</label>
+        <input type="text" class="form-input" id="topicFormName" placeholder="输入选题名称">
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属类型</label>
+        <select class="form-select" id="topicFormType">
+          <option value="">选择类型</option>
+          <option value="医疗病历">医疗病历</option>
+          <option value="金融文本">金融文本</option>
+          <option value="客服对话">客服对话</option>
+          <option value="法律文书">法律文书</option>
+          <option value="教育数据">教育数据</option>
+          <option value="自定义场景">自定义场景</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">描述</label>
+        <textarea class="form-textarea" id="topicFormDesc" placeholder="选题简要描述"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">状态</label>
+        <select class="form-select" id="topicFormStatus">
+          <option value="草稿">草稿</option>
+          <option value="启用中">启用中</option>
+          <option value="已停用">已停用</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeTopicModal()">取消</button>
+      <button class="btn-primary" id="topicFormSubmit" onclick="saveTopic()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Upload Lexicon Modal ====== -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal" style="width:540px">
+    <div class="modal-header">
+      <h2>上传词库</h2>
+      <button class="modal-close" onclick="closeUploadModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Drop zone -->
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">&#8691;</div>
+        <div class="upload-text">拖拽词库文件到这里，或点击选择文件</div>
+        <div class="upload-hint">支持 .txt / .csv / .json 文件</div>
+        <div class="file-info">
+          <span class="file-badge" id="fileNameDisplay">—</span>
+          <span class="file-badge" id="fileSizeDisplay">—</span>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept=".txt,.csv,.json" style="display:none" onchange="handleFileSelect(this.files)">
+      <!-- Progress -->
+      <div class="progress-bar-wrap" id="progressWrap">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-label" id="progressLabel">上传中...</div>
+      <!-- Form fields (initially hidden) -->
+      <div id="uploadFormFields" style="display:none; margin-top: var(--space-5);">
+        <div class="form-group">
+          <label class="form-label">词库名称</label>
+          <input type="text" class="form-input" id="uploadFormName" placeholder="输入词库名称">
+        </div>
+        <div class="form-group">
+          <label class="form-label">词库类型</label>
+          <select class="form-select" id="uploadFormType">
+            <option value="">选择类型</option>
+            <option value="人名词库">人名词库</option>
+            <option value="电话词库">电话词库</option>
+            <option value="地址词库">地址词库</option>
+            <option value="疾病词库">疾病词库</option>
+            <option value="药品词库">药品词库</option>
+            <option value="金额词库">金额词库</option>
+            <option value="综合词库">综合词库</option>
+            <option value="自定义词库">自定义词库</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">敏感等级</label>
+          <select class="form-select" id="uploadFormSensitivity">
+            <option value="">选择等级</option>
+            <option value="低">低</option>
+            <option value="中">中</option>
+            <option value="高">高</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">状态</label>
+          <select class="form-select" id="uploadFormStatus">
+            <option value="可用">可用</option>
+            <option value="更新中">更新中</option>
+            <option value="已停用">已停用</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeUploadModal()">取消</button>
+      <button class="btn-primary" id="uploadSubmitBtn" onclick="submitUpload()" disabled>确认上传</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Confirm Dialog ====== -->
+<div class="confirm-overlay" id="confirmDialog">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">确认删除</h3>
+    <p id="confirmMsg">此操作不可撤销。</p>
+    <div class="confirm-actions">
+      <button class="btn-secondary" onclick="closeConfirm()">取消</button>
+      <button class="btn-danger" id="confirmBtn" onclick="execConfirm()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Toast Container ====== -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===========================================================================
+// Mock Data
+// ===========================================================================
+var topics = [
+  { id: 'T001', name: '医疗病历脱敏场景', type: '医疗病历', desc: '包含常见医疗文本脱敏模板与规则', lexiconCount: 3, createdAt: '2025-11-20', status: '启用中' },
+  { id: 'T002', name: '金融文本脱敏场景', type: '金融文本', desc: '银行交易记录与报表脱敏处理', lexiconCount: 2, createdAt: '2025-12-05', status: '启用中' },
+  { id: 'T003', name: '客服对话脱敏场景', type: '客服对话', desc: '客服系统聊天记录敏感信息脱敏', lexiconCount: 4, createdAt: '2026-01-15', status: '草稿' },
+  { id: 'T004', name: '法律文书脱敏场景', type: '法律文书', desc: '法律文件中个人身份信息处理', lexiconCount: 5, createdAt: '2026-02-10', status: '启用中' },
+  { id: 'T005', name: '教育数据脱敏场景', type: '教育数据', desc: '学生个人信息与成绩数据脱敏', lexiconCount: 1, createdAt: '2026-03-22', status: '已停用' },
+  { id: 'T006', name: '自定义测试场景', type: '自定义场景', desc: '通用脱敏功能测试与验证', lexiconCount: 2, createdAt: '2026-04-08', status: '草稿' },
+  { id: 'T007', name: '科研数据处理场景', type: '医疗病历', desc: '临床试验受试者数据脱敏处理', lexiconCount: 3, createdAt: '2026-05-14', status: '启用中' },
+];
+
+var lexicons = [
+  { id: 'L001', name: '中国人名词库', type: '人名词库', entryCount: 12850, sensitivity: '高', updatedAt: '2026-06-10', fileSize: '2.4 MB', status: '可用' },
+  { id: 'L002', name: '手机号码词库', type: '电话词库', entryCount: 9850, sensitivity: '高', updatedAt: '2026-06-08', fileSize: '1.1 MB', status: '可用' },
+  { id: 'L003', name: '地址信息词库', type: '地址词库', entryCount: 4520, sensitivity: '中', updatedAt: '2026-05-28', fileSize: '890 KB', status: '可用' },
+  { id: 'L004', name: '疾病名称词库', type: '疾病词库', entryCount: 3200, sensitivity: '中', updatedAt: '2026-06-12', fileSize: '540 KB', status: '更新中' },
+  { id: 'L005', name: '药品名称词库', type: '药品词库', entryCount: 6800, sensitivity: '中', updatedAt: '2026-06-05', fileSize: '1.2 MB', status: '可用' },
+  { id: 'L006', name: '金额数值词库', type: '金额词库', entryCount: 2100, sensitivity: '低', updatedAt: '2026-05-20', fileSize: '320 KB', status: '可用' },
+  { id: 'L007', name: '综合敏感词库', type: '综合词库', entryCount: 25000, sensitivity: '高', updatedAt: '2026-06-14', fileSize: '5.8 MB', status: '可用' },
+  { id: 'L008', name: '自定义测试词库', type: '自定义词库', entryCount: 850, sensitivity: '低', updatedAt: '2026-04-15', fileSize: '150 KB', status: '已停用' },
+  { id: 'L009', name: '英文人名词库', type: '人名词库', entryCount: 7800, sensitivity: '中', updatedAt: '2026-06-01', fileSize: '980 KB', status: '可用' },
+];
+
+var topicIdCounter = 8;
+var lexiconIdCounter = 10;
+var selectedFile = null;
+
+// ===========================================================================
+// Persistence via localStorage
+// ===========================================================================
+function loadState() {
+  try {
+    var saved = localStorage.getItem('preempt_library_state');
+    if (saved) {
+      var state = JSON.parse(saved);
+      if (state.topics) topics = state.topics;
+      if (state.lexicons) lexicons = state.lexicons;
+      if (state.topicIdCounter) topicIdCounter = state.topicIdCounter;
+    }
+  } catch(e) {}
+}
+function saveState() {
+  try {
+    localStorage.setItem('preempt_library_state', JSON.stringify({
+      topics: topics, lexicons: lexicons, topicIdCounter: topicIdCounter
+    }));
+  } catch(e) {}
+}
+
+// ===========================================================================
+// Stats update
+// ===========================================================================
+function updateStats() {
+  document.getElementById('statTopicTotal').textContent = topics.length;
+  document.getElementById('statTopicActive').textContent = topics.filter(function(t) { return t.status === '启用中'; }).length;
+  document.getElementById('statLexiconTotal').textContent = lexicons.length;
+  document.getElementById('statLexiconHigh').textContent = lexicons.filter(function(l) { return l.sensitivity === '高'; }).length;
+}
+
+// ===========================================================================
+// Topic rendering
+// ===========================================================================
+function statusBadge(status) {
+  if (status === '启用中') return '<span class="badge active">启用中</span>';
+  if (status === '草稿') return '<span class="badge draft">草稿</span>';
+  return '<span class="badge disabled">已停用</span>';
+}
+
+function renderTopics() {
+  var search = (document.getElementById('topicSearch').value || '').toLowerCase();
+  var typeFilter = document.getElementById('topicTypeFilter').value;
+  var statusFilter = document.getElementById('topicStatusFilter').value;
+
+  var filtered = topics.filter(function(t) {
+    if (search && t.name.toLowerCase().indexOf(search) === -1 && t.desc.toLowerCase().indexOf(search) === -1) return false;
+    if (typeFilter && t.type !== typeFilter) return false;
+    if (statusFilter && t.status !== statusFilter) return false;
+    return true;
+  });
+
+  var tbody = document.getElementById('topicTbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">&#9670;</div><div class="empty-text">没有匹配的选题</div></div></td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(function(t) {
+      return '<tr>' +
+        '<td><span class="cell-name">' + escHtml(t.name) + '</span></td>' +
+        '<td><span class="type-tag">' + escHtml(t.type) + '</span></td>' +
+        '<td><span class="cell-desc" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</span></td>' +
+        '<td><span class="cell-mono">' + t.lexiconCount + ' 个</span></td>' +
+        '<td><span class="cell-time">' + t.createdAt + '</span></td>' +
+        '<td>' + statusBadge(t.status) + '</td>' +
+        '<td><div class="actions">' +
+          '<button class="btn-secondary btn-sm" onclick="viewTopic(\'' + t.id + '\')">查看</button>' +
+          '<button class="btn-secondary btn-sm" onclick="editTopic(\'' + t.id + '\')">编辑</button>' +
+          '<button class="btn-secondary btn-sm" onclick="copyTopic(\'' + t.id + '\')">复制</button>' +
+          '<button class="btn-danger btn-sm" onclick="deleteTopic(\'' + t.id + '\')">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  updateStats();
+}
+
+// ===========================================================================
+// Lexicon rendering
+// ===========================================================================
+function sensitivityBadge(level) {
+  if (level === '高') return '<span class="badge sensitivity-high">高</span>';
+  if (level === '中') return '<span class="badge sensitivity-mid">中</span>';
+  return '<span class="badge sensitivity-low">低</span>';
+}
+
+function lexiconStatusBadge(status) {
+  if (status === '可用') return '<span class="badge available">可用</span>';
+  if (status === '更新中') return '<span class="badge updating">更新中</span>';
+  return '<span class="badge disabled">已停用</span>';
+}
+
+function renderLexicons() {
+  var search = (document.getElementById('lexiconSearch').value || '').toLowerCase();
+  var typeFilter = document.getElementById('lexiconTypeFilter').value;
+  var sensitivityFilter = document.getElementById('lexiconSensitivityFilter').value;
+  var statusFilter = document.getElementById('lexiconStatusFilter').value;
+
+  var filtered = lexicons.filter(function(l) {
+    if (search && l.name.toLowerCase().indexOf(search) === -1) return false;
+    if (typeFilter && l.type !== typeFilter) return false;
+    if (sensitivityFilter && l.sensitivity !== sensitivityFilter) return false;
+    if (statusFilter && l.status !== statusFilter) return false;
+    return true;
+  });
+
+  var tbody = document.getElementById('lexiconTbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">&#9670;</div><div class="empty-text">没有匹配的词库</div></div></td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(function(l) {
+      return '<tr>' +
+        '<td><span class="cell-name">' + escHtml(l.name) + '</span></td>' +
+        '<td><span class="type-tag">' + escHtml(l.type) + '</span></td>' +
+        '<td><span class="cell-mono">' + l.entryCount.toLocaleString() + ' 条</span></td>' +
+        '<td>' + sensitivityBadge(l.sensitivity) + '</td>' +
+        '<td><span class="cell-time">' + l.updatedAt + '</span></td>' +
+        '<td><span class="cell-mono">' + l.fileSize + '</span></td>' +
+        '<td>' + lexiconStatusBadge(l.status) + '</td>' +
+        '<td><div class="actions">' +
+          '<button class="btn-secondary btn-sm" onclick="downloadLexicon(\'' + l.id + '\')">下载</button>' +
+          '<button class="btn-danger btn-sm" onclick="deleteLexicon(\'' + l.id + '\')">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  updateStats();
+}
+
+// ===========================================================================
+// Topic CRUD
+// ===========================================================================
+var editingTopicId = null;
+
+function openTopicModal(id) {
+  editingTopicId = id || null;
+  if (id) {
+    var t = topics.find(function(x) { return x.id === id; });
+    if (!t) return;
+    document.getElementById('topicModalTitle').textContent = '编辑选题';
+    document.getElementById('topicFormName').value = t.name;
+    document.getElementById('topicFormType').value = t.type;
+    document.getElementById('topicFormDesc').value = t.desc;
+    document.getElementById('topicFormStatus').value = t.status;
+    document.getElementById('topicFormSubmit').textContent = '保存修改';
+  } else {
+    document.getElementById('topicModalTitle').textContent = '新增选题';
+    document.getElementById('topicFormName').value = '';
+    document.getElementById('topicFormType').value = '';
+    document.getElementById('topicFormDesc').value = '';
+    document.getElementById('topicFormStatus').value = '草稿';
+    document.getElementById('topicFormSubmit').textContent = '创建选题';
+  }
+  document.getElementById('topicModal').classList.add('open');
+}
+
+function closeTopicModal() {
+  document.getElementById('topicModal').classList.remove('open');
+  editingTopicId = null;
+}
+
+function saveTopic() {
+  var name = document.getElementById('topicFormName').value.trim();
+  var type = document.getElementById('topicFormType').value;
+  var desc = document.getElementById('topicFormDesc').value.trim();
+  var status = document.getElementById('topicFormStatus').value;
+
+  if (!name) { toast('请输入选题名称', 'warning'); return; }
+  if (!type) { toast('请选择所属类型', 'warning'); return; }
+
+  if (editingTopicId) {
+    var t = topics.find(function(x) { return x.id === editingTopicId; });
+    if (t) {
+      t.name = name; t.type = type; t.desc = desc; t.status = status;
+      toast('选题已更新');
+    }
+  } else {
+    var newId = 'T' + String(topicIdCounter).padStart(3, '0');
+    topicIdCounter++;
+    topics.unshift({
+      id: newId, name: name, type: type, desc: desc,
+      lexiconCount: Math.floor(Math.random() * 5) + 1,
+      createdAt: new Date().toISOString().slice(0, 10),
+      status: status
+    });
+    toast('选题已创建');
+  }
+
+  closeTopicModal();
+  saveState();
+  renderTopics();
+}
+
+function viewTopic(id) {
+  var t = topics.find(function(x) { return x.id === id; });
+  if (!t) return;
+  toast('查看选题: ' + t.name);
+}
+
+function editTopic(id) {
+  openTopicModal(id);
+}
+
+function copyTopic(id) {
+  var src = topics.find(function(x) { return x.id === id; });
+  if (!src) return;
+  var newId = 'T' + String(topicIdCounter).padStart(3, '0');
+  topicIdCounter++;
+  topics.unshift({
+    id: newId, name: src.name + ' (副本)', type: src.type, desc: src.desc,
+    lexiconCount: src.lexiconCount,
+    createdAt: new Date().toISOString().slice(0, 10),
+    status: '草稿'
+  });
+  toast('选题已复制');
+  saveState();
+  renderTopics();
+}
+
+function deleteTopic(id) {
+  var t = topics.find(function(x) { return x.id === id; });
+  if (!t) return;
+  showConfirm('确认删除', '确定要删除选题「' + t.name + '」吗？此操作不可撤销。', function() {
+    topics = topics.filter(function(x) { return x.id !== id; });
+    toast('选题已删除');
+    saveState();
+    renderTopics();
+  });
+}
+
+// ===========================================================================
+// Lexicon operations
+// ===========================================================================
+function downloadLexicon(id) {
+  var l = lexicons.find(function(x) { return x.id === id; });
+  if (!l) return;
+
+  // Build mock file content
+  var content = [
+    '# ' + l.name,
+    '# 类型: ' + l.type,
+    '# 词条数量: ' + l.entryCount.toLocaleString(),
+    '# 导出时间: ' + new Date().toISOString(),
+    '',
+  ];
+
+  // Generate sample entries based on type
+  var samples = generateSampleEntries(l.type, 30);
+  content = content.concat(samples);
+
+  var ext = '.txt';
+  var mime = 'text/plain';
+  var blob = new Blob([content.join('\n')], { type: mime + ';charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = l.name + ext;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  toast('词库「' + l.name + '」已开始下载');
+}
+
+function generateSampleEntries(type, count) {
+  var pools = {
+    '人名词库': ['张伟', '李明', '王芳', '刘洋', '陈静', '赵磊', '孙敏', '周杰', '吴婷', '郑浩', '冯雪', '褚明', '卫兰', '蒋涛', '沈悦', '韩冰', '杨帆', '朱峰', '秦风', '许安', '何琳', '吕波', '施梦', '魏晨', '华玉'],
+    '电话词库': ['13800000001', '13900000002', '13700000003', '13600000004', '13500000005', '13400000006', '13300000007', '13200000008', '13100000009', '13000000010'],
+    '地址词库': ['北京市朝阳区XX路100号', '上海市浦东新区YY大道200号', '广州市天河区ZZ路300号', '深圳市南山区AA路400号', '杭州市西湖区BB街500号', '成都市武侯区CC巷600号'],
+    '疾病词库': ['高血压', '糖尿病', '冠心病', '脑卒中', '慢性支气管炎', '哮喘', '胃炎', '肝炎', '肾炎', '贫血'],
+    '药品词库': ['硝苯地平', '二甲双胍', '阿司匹林', '阿托伐他汀', '美托洛尔', '氯沙坦', '头孢克洛', '布洛芬', '对乙酰氨基酚', '奥美拉唑'],
+    '金额词库': ['100.00', '250.50', '500.00', '1280.00', '3600.00', '8500.00', '15000.00', '52000.00', '100000.00', '250000.00'],
+    '综合词库': ['张伟,13800000001,高血压,硝苯地平', '李明,13900000002,糖尿病,二甲双胍', '王芳,13700000003,冠心病,阿司匹林'],
+    '自定义词库': ['custom_entry_001', 'custom_entry_002', 'custom_entry_003', 'custom_entry_004', 'custom_entry_005'],
+  };
+  var pool = pools[type] || ['sample_entry_001', 'sample_entry_002', 'sample_entry_003'];
+  var result = [];
+  for (var i = 0; i < count; i++) {
+    result.push(pool[i % pool.length] + (type === '电话词库' || type === '金额词库' ? '' : ''));
+  }
+  return result;
+}
+
+function deleteLexicon(id) {
+  var l = lexicons.find(function(x) { return x.id === id; });
+  if (!l) return;
+  showConfirm('确认删除', '确定要删除词库「' + l.name + '」吗？此操作不可撤销。', function() {
+    lexicons = lexicons.filter(function(x) { return x.id !== id; });
+    toast('词库已删除');
+    saveState();
+    renderLexicons();
+  });
+}
+
+// ===========================================================================
+// Upload lexicon
+// ===========================================================================
+function openUploadModal() {
+  document.getElementById('uploadModal').classList.add('open');
+  resetUploadForm();
+}
+
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.remove('open');
+  resetUploadForm();
+}
+
+function resetUploadForm() {
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('uploadZone').classList.remove('has-file', 'dragover');
+  document.getElementById('uploadFormName').value = '';
+  document.getElementById('uploadFormType').value = '';
+  document.getElementById('uploadFormSensitivity').value = '';
+  document.getElementById('uploadFormStatus').value = '可用';
+  document.getElementById('uploadFormFields').style.display = 'none';
+  document.getElementById('uploadSubmitBtn').disabled = true;
+  document.getElementById('progressWrap').classList.remove('active');
+  document.getElementById('progressLabel').classList.remove('active');
+  document.getElementById('progressFill').style.width = '0%';
+}
+
+function handleFileSelect(files) {
+  if (!files || !files.length) return;
+  var f = files[0];
+  selectedFile = f;
+  document.getElementById('fileNameDisplay').textContent = f.name;
+  document.getElementById('fileSizeDisplay').textContent = formatFileSize(f.size);
+  document.getElementById('uploadZone').classList.add('has-file');
+  // Pre-fill name from filename (strip extension)
+  if (!document.getElementById('uploadFormName').value) {
+    var name = f.name.replace(/\.[^/.]+$/, '');
+    document.getElementById('uploadFormName').value = name;
+  }
+  document.getElementById('uploadFormFields').style.display = 'block';
+  document.getElementById('uploadSubmitBtn').disabled = false;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function submitUpload() {
+  var name = document.getElementById('uploadFormName').value.trim();
+  var type = document.getElementById('uploadFormType').value;
+  var sensitivity = document.getElementById('uploadFormSensitivity').value;
+  var status = document.getElementById('uploadFormStatus').value;
+
+  if (!selectedFile) { toast('请先选择要上传的文件', 'warning'); return; }
+  if (!name) { toast('请输入词库名称', 'warning'); return; }
+  if (!type) { toast('请选择词库类型', 'warning'); return; }
+  if (!sensitivity) { toast('请选择敏感等级', 'warning'); return; }
+
+  // Simulate upload progress
+  var btn = document.getElementById('uploadSubmitBtn');
+  var progressWrap = document.getElementById('progressWrap');
+  var progressFill = document.getElementById('progressFill');
+  var progressLabel = document.getElementById('progressLabel');
+  btn.disabled = true;
+  btn.textContent = '上传中...';
+  progressWrap.classList.add('active');
+  progressLabel.classList.add('active');
+
+  var percent = 0;
+  var interval = setInterval(function() {
+    percent += Math.random() * 35;
+    if (percent >= 100) {
+      percent = 100;
+      progressFill.style.width = '100%';
+      progressLabel.textContent = '处理完成';
+      clearInterval(interval);
+
+      // Add to lexicon list
+      var newId = 'L' + String(lexiconIdCounter).padStart(3, '0');
+      lexiconIdCounter++;
+      lexicons.unshift({
+        id: newId,
+        name: name,
+        type: type,
+        entryCount: selectedFile ? Math.floor(selectedFile.size / 80) + Math.floor(Math.random() * 500) : Math.floor(Math.random() * 3000) + 500,
+        sensitivity: sensitivity,
+        updatedAt: new Date().toISOString().slice(0, 10),
+        fileSize: formatFileSize(selectedFile ? selectedFile.size : 0),
+        status: status
+      });
+
+      // Cleanup after short delay
+      setTimeout(function() {
+        closeUploadModal();
+        btn.disabled = false;
+        btn.textContent = '确认上传';
+        saveState();
+        renderLexicons();
+        toast('词库「' + name + '」上传成功');
+      }, 500);
+    } else {
+      progressFill.style.width = percent + '%';
+      progressLabel.textContent = '上传中 ' + Math.round(percent) + '%';
+    }
+  }, 220);
+}
+
+// ===========================================================================
+// Confirm dialog
+// ===========================================================================
+var confirmCallback = null;
+
+function showConfirm(title, msg, cb) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  confirmCallback = cb;
+  document.getElementById('confirmDialog').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmDialog').classList.remove('open');
+  confirmCallback = null;
+}
+
+function execConfirm() {
+  if (confirmCallback) confirmCallback();
+  closeConfirm();
+}
+
+// ===========================================================================
+// Toast
+// ===========================================================================
+var toastTimer = null;
+function toast(msg, type) {
+  type = type || 'success';
+  var container = document.getElementById('toastContainer');
+  var el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(function() {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }, 2200);
+}
+
+// ===========================================================================
+// Modal click-outside
+// ===========================================================================
+document.getElementById('topicModal').addEventListener('click', function(e) {
+  if (e.target === this) closeTopicModal();
+});
+document.getElementById('uploadModal').addEventListener('click', function(e) {
+  if (e.target === this) closeUploadModal();
+});
+document.getElementById('confirmDialog').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirm();
+});
+
+// ===========================================================================
+// Keyboard shortcuts
+// ===========================================================================
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('confirmDialog').classList.contains('open')) {
+      closeConfirm();
+    } else if (document.getElementById('uploadModal').classList.contains('open')) {
+      closeUploadModal();
+    } else if (document.getElementById('topicModal').classList.contains('open')) {
+      closeTopicModal();
+    }
+  }
+});
+
+// ===========================================================================
+// Helpers
+// ===========================================================================
+function escHtml(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function escAttr(s) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ===========================================================================
+// Init
+// ===========================================================================
+loadState();
+
+// Drag & drop for upload zone
+var uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', function() { uploadZone.classList.remove('dragover'); });
+uploadZone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  handleFileSelect(e.dataTransfer.files);
+});
+
+renderTopics();
+renderLexicons();
+</script>
+</body>
+</html>
