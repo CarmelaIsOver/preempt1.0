@@ -1,0 +1,40 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Claude Code local config
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Pre-trained word vector models (download separately)
+*.bin
+
+# Generated numpy arrays (regenerate from scripts)
+*.npy
+*.npz
+
+# HuggingFace cache
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Distribution
+dist/
+build/
+*.egg-info/
